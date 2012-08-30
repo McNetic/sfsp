@@ -61,8 +61,6 @@ import sys
 import os
 import errno
 import getopt
-import socket
-from warnings import warn
 
 import sfsp
 from sfsp import debug
@@ -73,8 +71,6 @@ program = sys.argv[0]
 __version__ = 'Python SMTP proxy version 0.2'
 
 
-NEWLINE = '\n'
-EMPTYSTRING = ''
 COMMASPACE = ', '
 
 
@@ -87,52 +83,10 @@ def usage(code, msg=''):
 
 
 
-class PureProxy(sfsp.Proxy):
-    def process_message(self, peer, mailfrom, rcpttos, data):
-        lines = data.split('\n')
-        # Look for the last header
-        i = 0
-        for line in lines:
-            if not line:
-                break
-            i += 1
-        lines.insert(i, 'X-Peer: %s' % peer[0])
-        data = NEWLINE.join(lines)
-        refused = self._deliver(mailfrom, rcpttos, data)
-        # TBD: what to do with refused addresses?
-        print('we got some refusals:', refused, file=debug.stream)
-
-    def _deliver(self, mailfrom, rcpttos, data):
-        import smtplib
-        refused = {}
-        try:
-            s = smtplib.SMTP()
-            s.connect(self._remoteaddr[0], self._remoteaddr[1])
-            try:
-                refused = s.sendmail(mailfrom, rcpttos, data)
-            finally:
-                s.quit()
-        except smtplib.SMTPRecipientsRefused as e:
-            print('got SMTPRecipientsRefused', file=debug.stream)
-            refused = e.recipients
-        except (socket.error, smtplib.SMTPException) as e:
-            print('got', e.__class__, file=debug.stream)
-            # All recipients were refused.  If the exception had an associated
-            # error code, use it.  Otherwise,fake it with a non-triggering
-            # exception code.
-            errcode = getattr(e, 'smtp_code', -1)
-            errmsg = getattr(e, 'smtp_error', 'ignore')
-            for r in rcpttos:
-                refused[r] = (errcode, errmsg)
-        return refused
-
-
 
 
 class Options:
     setuid = 1
-    classname = 'PureProxy'
-
 
 
 def parseargs():
@@ -193,7 +147,7 @@ def parseargs():
 if __name__ == '__main__':
     options = parseargs()
     proxy = sfsp.Proxy((options.localhost, options.localport),
-                   (options.remotehost, options.remoteport))
+                   (options.remotehost, options.remoteport), __version__)
     # Become nobody
     if options.setuid:
         try:
@@ -209,6 +163,7 @@ if __name__ == '__main__':
             print('Cannot setuid "nobody"; try running with -n option.', file=sys.stderr)
             sys.exit(1)
     try:
+        print('Starting...', file=debug.stream())
         proxy.run()
     except KeyboardInterrupt:
         pass

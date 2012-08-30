@@ -15,10 +15,34 @@
   * archivierung?
   * statistiken
   * zu auswertungszwecken sammeln
+  * webinterface
+    * konfiguration
+    * statistiken
+    * archiv
+  * sqlite
   
   
 CONCEPT
 
+ * sfsp loads modules on startup
+ * instantiates proxy
+ * proxy listens for connections
+ * instantiates smtpsession
+ * smtpsession handles session
+ * smtpsession handles transactions
+ 
+Error Levels
+
+ * Session Fatal      Can not continue session, missing or invalid data,
+                      connection list, etc.
+ * Transaction Fatal  Can not continue, missing or invalid data, etc.
+ * Protocol Fatal     Protocol states fatal, but technically, continuing would
+                      be possible
+ * Error              Client error, protocol states giving up is possible
+ * Undesirable        Undesirable client behaviour, protocol states we should
+                      continue
+ * Suspicious         Suspicious client behaviour
+ * Warning            (Possible unintended) malbeviour, should be reported back
 
 
 telnet mail.netatwork.de 25  (bitte als Kommandozeile unter NT eingeben)

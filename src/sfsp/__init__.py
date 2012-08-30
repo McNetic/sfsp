@@ -1,3 +1,3 @@
-__all__ = []
+__all__ = ['session', 'transaction']
 
 from .proxy import Proxy

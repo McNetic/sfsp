@@ -6,10 +6,14 @@ class Devnull:
     def write(self, msg): pass
     def flush(self): pass
 
-stream = Devnull()
+class Debug:
+    stream = Devnull()    
 
 def enable(debugstream = sys.stderr):
-    stream = debugstream
+    Debug.stream = debugstream
     
 def disable():
-    stream = Devnull()
+    Debug.stream = Devnull()
+
+def stream():
+    return Debug.stream 
