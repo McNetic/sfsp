@@ -82,7 +82,6 @@ def usage(code, msg=''):
     sys.exit(code)
 
 
-
 
 
 class Options:
@@ -143,9 +142,15 @@ def parseargs():
         usage(1, 'Bad remote port: %s' % remotespec)
     return options
 
-
+def load_plugins():
+    try:
+        __import__('plugins.greylisting')
+    except ImportError:
+        print('Cannot import module "greylisting"', file=sys.stderr)
+
 if __name__ == '__main__':
     options = parseargs()
+    load_plugins()
     proxy = sfsp.Proxy((options.localhost, options.localport),
                    (options.remotehost, options.remoteport), __version__)
     # Become nobody
@@ -163,7 +168,6 @@ if __name__ == '__main__':
             print('Cannot setuid "nobody"; try running with -n option.', file=sys.stderr)
             sys.exit(1)
     try:
-        print('Starting...', file=debug.stream())
         proxy.run()
     except KeyboardInterrupt:
         pass

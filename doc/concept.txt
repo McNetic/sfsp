@@ -44,6 +44,11 @@ Error Levels
  * Suspicious         Suspicious client behaviour
  * Warning            (Possible unintended) malbeviour, should be reported back
 
+Plugin Types and Capabilities
+ * Filter
+   * reject mail
+   * add score
+ 
 
 telnet mail.netatwork.de 25  (bitte als Kommandozeile unter NT eingeben)
 

@@ -12,6 +12,7 @@ class SMTPTransaction():
         '''
         self.mailfrom = mailfrom
         self.recipients = []
+        self.data  = ''
     
     def addRecipient(self, address):
         self.recipients.append(address)

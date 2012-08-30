@@ -5,6 +5,7 @@ import socket
 from sfsp import debug
 from sfsp.transaction import *
 from sfsp.client import *
+import sfsp.plugin.filter
 
 __all__ = ['SMTPSession']
 
@@ -27,7 +28,6 @@ class SMTPSession(asynchat.async_chat):
         self.smtp_state = self.COMMAND
         self.seen_greeting = False
         self.transaction = None
-        self.received_data = ''
         self.fqdn = socket.getfqdn()
         self.num_bytes = 0
         try:
@@ -40,6 +40,8 @@ class SMTPSession(asynchat.async_chat):
                 raise
             return
         print('Peer:', repr(self.peer), file=debug.stream())
+        print('Address:', repr(address), file=debug.stream())
+        
         self.push('220 %s %s' % (self.fqdn, self.smtp_server.version))
         self.set_terminator(b'\r\n')
 
@@ -105,11 +107,11 @@ class SMTPSession(asynchat.async_chat):
                     data.append(text[1:])
                 else:
                     data.append(text)
-            self.received_data = NEWLINE.join(data)
+            self.transaction.data = NEWLINE.join(data)
             status = self.smtp_server.process_message(self.peer,
                                                       self.transaction.mailfrom,
                                                       self.transaction.recipients,
-                                                      self.received_data)
+                                                      self.transaction.data)
             self.transaction = None
             self.smtp_state = self.COMMAND
             self.num_bytes = 0
@@ -121,7 +123,6 @@ class SMTPSession(asynchat.async_chat):
 
     def reset(self):
         self.transaction = None
-        self.received_data = ''
         self.smtp_state = self.COMMAND
     
     # SMTP and ESMTP commands
@@ -187,6 +188,7 @@ class SMTPSession(asynchat.async_chat):
         # end validation
         
         self.transaction = SMTPTransaction(address)
+        
         print('sender:', self.transaction.mailfrom, file=debug.stream())
         self.push('250 Ok')
 
@@ -201,6 +203,12 @@ class SMTPSession(asynchat.async_chat):
             self.push('501 Syntax: RCPT TO: <address>')
             return
         # end validation
+        
+        # begin filtering
+        result = sfsp.plugin.filter.validateRecipient(session, recipient)
+        
+        
+        # end filtering
         
         self.transaction.addRecipient(address)
         print('recips:', self.transaction.recipients, file=debug.stream())
