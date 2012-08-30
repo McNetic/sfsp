@@ -1,0 +1,44 @@
+  SIMPLE FILTERING SMTP PROXY
+  ============================
+  
+  (modular filtering smtp proxy/gateway)
+  
+  * whitelists/blacklists
+  * rbl
+  * spamd
+  * amavis
+  * clamav
+  * greylisting
+  * bewertungen (positiv/negativ), verschiedene klassen
+  * ablehnungsgründe sammeln
+  * kommunikationsbeziehungen
+  * archivierung?
+  * statistiken
+  * zu auswertungszwecken sammeln
+  
+  
+CONCEPT
+
+
+
+telnet mail.netatwork.de 25  (bitte als Kommandozeile unter NT eingeben)
+
+220 nawsv001.netatwork.de Microsoft ESMTP MAIL Service, Version: 5.0.2195.1600 ready at Sun, 19 Nov 2000 17:15:09 +0100 (Die Meldung kommt alleine. Etwas GEDULD)
+helo mailhost.domain.tld (Das ist ihre erste Eingabe)
+250 nawsv001.netatwork.de Hello [192.168.100.53] (und die erste Antwort)
+mail from:<absender@domain.tld>  (Das ist die Absenderadresse, die sie vorgeben)
+250 2.1.0 absender@domain.tld....Sender OK  (Wird bestätigt)
+rcpt to:<empfaenger@domain.tld> (Hier hin soll die Mail gesendet werden)
+250 2.1.5 empfaenger@domain.tld (Auch das wird bestätigt)
+ data   (hier bitte etwas warten, einige Mailserver und Contentfilter prüfen nun einige Daten)
+354 Start mail input; end with <CRLF>.<CRLF>  (Nun sind sie an der Reihe)
+Subject: Test per SMTP (Alles was sie nun noch tippen ist der der Mailheader, z.B. Datum etc.)
+
+ Nach einer Leerzeile beginnt der Body (Eine Leerzeile beendet den Header)
+ Und er endet mit einem Punkt auf einer Zeile
+ . (<<-----  Hier ist "nur" ein PUNKT und die Eingabetaste. Diese taucht nicht in der Mail auf)
+250 2.6.0 <NAWSV001OeIiGXix4A20000011f@nawsv001.netatwork.de> Queued mail for delivery  (Der Mailserver hat die Nachricht akzeptiert)
+quit (Nun beenden Sie sauber die Verbindung)
+221 2.0.0 nawsv001.netatwork.de Service closing transmission channel
+
+ Verbindung zu Host verloren. (Das meldet dann ihr Terminal Programm)
