@@ -28,14 +28,14 @@ class Filter(sfsp.plugin.Plugin):
 
     def __init__(self):
         sfsp.plugin.Plugin.__init__(self)
-
-@hook
-def validateRecipient(address):
-    pass
-
-def notifyStartTransaction():
-    pass
     
-def notifyAddRecipient():
-    pass
+    @hook
+    def validateRecipient(self, address):
+        pass
+    
+    def notifyStartTransaction(self):
+        pass
+        
+    def notifyAddRecipient(self):
+        pass
 

@@ -1,4 +1,3 @@
-from .filter import Filter
 
 class PluginException(Exception):
     pass
@@ -19,4 +18,3 @@ class Plugin():
     @staticmethod
     def register(plugin):
         Plugin.loadedPlugins.add(plugin.__class__())
-        

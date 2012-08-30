@@ -9,12 +9,12 @@ from sfsp import plugin
 def name():
     pass
 
-class Filter(plugin.Filter):
+class Filter(plugin.filter.Filter):
     '''
     classdocs
     '''
 
     def __init__(self):
-        plugin.Filter.__init__(self)
+        plugin.filter.Filter.__init__(self)
         
     
