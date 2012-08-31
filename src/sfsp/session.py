@@ -13,8 +13,14 @@ EMPTYSTRING = ''
 NEWLINE = '\n'
 
 class SMTPSession(asynchat.async_chat):
-    COMMAND = 0
-    DATA = 1
+    SMTP = object()
+    SMTP.COMMAND = 0
+    SMTP.DATA = 1
+    
+    DATA = object()
+    DATA.NONE = 0
+    DATA.HEADER = 1
+    DATA.BODY = 2
 
     data_size_limit = 33554432
     command_size_limit = 512
@@ -25,7 +31,8 @@ class SMTPSession(asynchat.async_chat):
         self.sock = sock
         self.client = SMTPClient(address)
         self.received_lines = []
-        self.smtp_state = self.COMMAND
+        self.smtp_state = self.SMTP.COMMAND
+        self.data_state = self.DATA.NONE
         self.seen_greeting = False
         self.transaction = None
         self.fqdn = socket.getfqdn()
@@ -52,9 +59,9 @@ class SMTPSession(asynchat.async_chat):
     # Implementation of base class abstract method
     def collect_incoming_data(self, data):
         limit = None
-        if self.smtp_state == self.COMMAND:
+        if self.smtp_state == self.SMTP.COMMAND:
             limit = self.command_size_limit
-        elif self.smtp_state == self.DATA:
+        elif self.smtp_state == self.SMTP.DATA:
             limit = self.data_size_limit
         if limit and self.num_bytes > limit:
             return
@@ -62,68 +69,81 @@ class SMTPSession(asynchat.async_chat):
             self.num_bytes += len(data)
         self.received_lines.append(str(data, "ascii"))
 
-    # Implementation of base class abstract method
-    def found_terminator(self):
-        line = EMPTYSTRING.join(self.received_lines)
-        print('Data:', repr(line), file=debug.stream())
-        self.received_lines = []
-        if self.smtp_state == self.COMMAND:
-            if self.num_bytes > self.command_size_limit:
-                self.push('500 Error: line too long')
-                self.num_bytes = 0
-                return
+    def command_terminated(self, line):
+        if self.num_bytes > self.command_size_limit:
+            self.push('500 Error: line too long')
             self.num_bytes = 0
-            if not line:
-                self.push('500 Error: bad syntax')
-                return
-            method = None
-            i = line.find(' ')
-            if i < 0:
-                command = line.upper()
-                arg = None
-            else:
-                command = line[:i].upper()
-                arg = line[i+1:].strip()
-            method = getattr(self, 'smtp_' + command, None)
-            if not method:
-                self.push('502 Error: command "%s" not implemented' % command)
-                return
-            method(arg)
             return
+        self.num_bytes = 0
+        if not line:
+            self.push('500 Error: bad syntax')
+            return
+        i = line.find(' ')
+        if i < 0:
+            command = line.upper()
+            arg = None
         else:
-            if self.smtp_state != self.DATA:
-                self.push('451 Internal confusion')
-                self.num_bytes = 0
-                return
-            if self.num_bytes > self.data_size_limit:
-                self.push('552 Error: Too much mail data')
-                self.num_bytes = 0
-                return
-            # Remove extraneous carriage returns and de-transparency according
-            # to RFC 821, Section 4.5.2.
-            data = []
-            for text in line.split('\r\n'):
-                if text and text[0] == '.':
-                    data.append(text[1:])
-                else:
-                    data.append(text)
-            self.transaction.data = NEWLINE.join(data)
+            command = line[:i].upper()
+            arg = line[i+1:].strip()
+        method = getattr(self, 'smtp_' + command, None)
+        if not method:
+            self.push('502 Error: command "%s" not implemented' % command)
+            return
+        method(arg)
+        return
+
+    def data_terminated(self, line):
+        if self.smtp_state != self.SMTP.DATA or (self.data_state != self.DATA.HEADER and self.data_state != self.DATA.BODY):
+            self.push('451 Internal confusion')
+            self.num_bytes = 0
+            return
+        if self.num_bytes > self.data_size_limit:
+            self.push('552 Error: Too much mail data')
+            self.num_bytes = 0
+            return
+        # Remove extraneous carriage returns and de-transparency according
+        # to RFC 821, Section 4.5.2.
+        data = []
+        for text in line.split('\r\n'):
+            if text and text[0] == '.':
+                data.append(text[1:])
+            else:
+                data.append(text)
+        if self.DATA.HEADER == self.data_state:
+            self.transaction.headers = NEWLINE.join(data)
+            self.set_terminator(b'\r\n.\r\n')
+            self.data_state = self.DATA.BODY
+        else:
+            self.transaction.body = NEWLINE.join(data)
+            self.set_terminator(b'\r\n')
+            self.data_state = self.DATA.NONE
+                
             status = self.smtp_server.process_message(self.peer,
                                                       self.transaction.mailfrom,
                                                       self.transaction.recipients,
                                                       self.transaction.data)
             self.transaction = None
-            self.smtp_state = self.COMMAND
+            self.smtp_state = self.SMTP.COMMAND
             self.num_bytes = 0
-            self.set_terminator(b'\r\n')
+            
             if not status:
                 self.push('250 Ok')
             else:
                 self.push(status)
 
+    # Implementation of base class abstract method
+    def found_terminator(self):
+        line = EMPTYSTRING.join(self.received_lines)
+        print('Data:', repr(line), file=debug.stream())
+        self.received_lines = []
+        if self.smtp_state == self.SMTP.COMMAND:
+            self.command_terminated(line)
+        else:
+            self.data_terminated(line)
+
     def reset(self):
         self.transaction = None
-        self.smtp_state = self.COMMAND
+        self.smtp_state = self.SMTP.COMMAND
     
     # SMTP and ESMTP commands
     def smtp_HELO(self, arg):
@@ -237,7 +257,8 @@ class SMTPSession(asynchat.async_chat):
             return
         # end validation
         
-        self.smtp_state = self.DATA
-        self.set_terminator(b'\r\n.\r\n')
+        self.smtp_state = self.SMTP.DATA
+        self.data_state = self.DATA.HEADER 
+        self.set_terminator(b'\r\n\r\n')        
         self.push('354 End data with <CR><LF>.<CR><LF>')
 

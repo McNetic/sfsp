@@ -1,4 +1,5 @@
 from sfsp.plugin import event
+from sfsp.delivery import *
 
 __all__ = ['SMTPTransaction']
 
@@ -14,6 +15,7 @@ class SMTPTransaction():
         self.mailfrom = mailfrom
         self.recipients = []
         self.data  = ''
+        self.delivery = SMTPDelivery()
         event.StartTransaction.notify(self)
     
     def addRecipient(self, address):
