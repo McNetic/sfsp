@@ -4,9 +4,8 @@ Created on 30.08.2012
 @author: ehe
 '''
 import sfsp.plugin
-from .hook import hook
 
-class FilterResult():
+class FilterResult(sfsp.plugin.event.EventResult):
     OK = 0
     WARNING = 1
     SUSPICIOUS = 2
@@ -16,10 +15,10 @@ class FilterResult():
     TRANSACTION_FATAL = 6
     SESSION_FATAL = 7
     
-    def __init__(self):
-        self.errorlevel = FilterResult.OK
-        self.message = None
-        self.smtp_error = 250
+    def __init__(self, errorlevel=OK, message=None, smtp_error=250):
+        self.errorlevel = errorlevel
+        self.message = message
+        self.smtp_error = smtp_error
 
 class Filter(sfsp.plugin.Plugin):
     '''
@@ -29,13 +28,8 @@ class Filter(sfsp.plugin.Plugin):
     def __init__(self):
         sfsp.plugin.Plugin.__init__(self)
     
-    @hook
-    def validateRecipient(self, address):
-        pass
+    @staticmethod
+    def validateRecipient(session, address):
+        return sfsp.plugin.event.ValidateRecipient.probe(FilterResult(), session, address)
     
-    def notifyStartTransaction(self):
-        pass
-        
-    def notifyAddRecipient(self):
-        pass
 

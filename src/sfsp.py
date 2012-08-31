@@ -142,11 +142,15 @@ def parseargs():
         usage(1, 'Bad remote port: %s' % remotespec)
     return options
 
-def load_plugins():
+def load_plugin(plugin):
     try:
-        __import__('plugins.greylisting')
+        __import__(plugin)
+        sfsp.plugin.Plugin.registerModule(plugin)
     except ImportError:
-        print('Cannot import module "greylisting"', file=sys.stderr)
+        print('Cannot import module "{}"'.format(plugin), file=sys.stderr)
+
+def load_plugins():
+    load_plugin('plugins.greylisting')
 
 if __name__ == '__main__':
     options = parseargs()

@@ -204,8 +204,10 @@ class SMTPSession(asynchat.async_chat):
             return
         # end validation
         
-        # begin filtering
-        result = sfsp.plugin.filter.validateRecipient(session, recipient)
+        result = sfsp.plugin.filter.Filter.validateRecipient(self, address)
+        if 250 != result.mainresult.smtp_error:
+            self.push("{} {}".format(result.mainresult.smtp_error, result.mainresult.message))
+            return 
         
         
         # end filtering

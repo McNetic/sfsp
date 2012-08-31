@@ -1,10 +1,11 @@
+from sfsp.plugin import event
+
 __all__ = ['SMTPTransaction']
 
 class SMTPTransaction():
     '''
     classdocs
     '''
-
 
     def __init__(self, mailfrom):
         '''
@@ -13,7 +14,9 @@ class SMTPTransaction():
         self.mailfrom = mailfrom
         self.recipients = []
         self.data  = ''
+        event.StartTransaction.notify(self)
     
     def addRecipient(self, address):
         self.recipients.append(address)
+        event.AddRecipient.notify(self)
     
