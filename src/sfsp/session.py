@@ -13,14 +13,12 @@ EMPTYSTRING = ''
 NEWLINE = '\n'
 
 class SMTPSession(asynchat.async_chat):
-    SMTP = object()
-    SMTP.COMMAND = 0
-    SMTP.DATA = 1
+    SMTP_COMMAND = 0
+    SMTP_DATA = 1
     
-    DATA = object()
-    DATA.NONE = 0
-    DATA.HEADER = 1
-    DATA.BODY = 2
+    DATA_NONE = 0
+    DATA_HEADER = 1
+    DATA_BODY = 2
 
     data_size_limit = 33554432
     command_size_limit = 512
@@ -31,8 +29,8 @@ class SMTPSession(asynchat.async_chat):
         self.sock = sock
         self.client = SMTPClient(address)
         self.received_lines = []
-        self.smtp_state = self.SMTP.COMMAND
-        self.data_state = self.DATA.NONE
+        self.smtp_state = self.SMTP_COMMAND
+        self.data_state = self.DATA_NONE
         self.seen_greeting = False
         self.transaction = None
         self.fqdn = socket.getfqdn()
@@ -51,6 +49,7 @@ class SMTPSession(asynchat.async_chat):
         
         self.push('220 %s %s' % (self.fqdn, self.smtp_server.version))
         self.set_terminator(b'\r\n')
+        self.last_line = None
 
     # Overrides base class for convenience
     def push(self, msg):
@@ -59,9 +58,9 @@ class SMTPSession(asynchat.async_chat):
     # Implementation of base class abstract method
     def collect_incoming_data(self, data):
         limit = None
-        if self.smtp_state == self.SMTP.COMMAND:
+        if self.smtp_state == self.SMTP_COMMAND:
             limit = self.command_size_limit
-        elif self.smtp_state == self.SMTP.DATA:
+        elif self.smtp_state == self.SMTP_DATA:
             limit = self.data_size_limit
         if limit and self.num_bytes > limit:
             return
@@ -93,7 +92,7 @@ class SMTPSession(asynchat.async_chat):
         return
 
     def data_terminated(self, line):
-        if self.smtp_state != self.SMTP.DATA or (self.data_state != self.DATA.HEADER and self.data_state != self.DATA.BODY):
+        if self.smtp_state != self.SMTP_DATA or (self.data_state != self.DATA_HEADER and self.data_state != self.DATA_BODY):
             self.push('451 Internal confusion')
             self.num_bytes = 0
             return
@@ -101,49 +100,45 @@ class SMTPSession(asynchat.async_chat):
             self.push('552 Error: Too much mail data')
             self.num_bytes = 0
             return
+        
+        if '.' == line:
+            # end of transaction
+            self.process_message()
+            self.data_state = self.DATA_NONE        
+        
         # Remove extraneous carriage returns and de-transparency according
         # to RFC 821, Section 4.5.2.
-        data = []
-        for text in line.split('\r\n'):
-            if text and text[0] == '.':
-                data.append(text[1:])
+        if '.' == line[0]:
+            line = line[1:]
+        if self.DATA_HEADER == self.data_state:
+            if '' == line:
+                self.data_state = self.DATA_BODY
             else:
-                data.append(text)
-        if self.DATA.HEADER == self.data_state:
-            self.transaction.headers = NEWLINE.join(data)
-            self.set_terminator(b'\r\n.\r\n')
-            self.data_state = self.DATA.BODY
+                self.transaction.headers.append(line)
         else:
-            self.transaction.body = NEWLINE.join(data)
-            self.set_terminator(b'\r\n')
-            self.data_state = self.DATA.NONE
-                
-            status = self.smtp_server.process_message(self.peer,
-                                                      self.transaction.mailfrom,
-                                                      self.transaction.recipients,
-                                                      self.transaction.data)
-            self.transaction = None
-            self.smtp_state = self.SMTP.COMMAND
-            self.num_bytes = 0
-            
-            if not status:
-                self.push('250 Ok')
-            else:
-                self.push(status)
+            self.transaction.body.append(line)    
+
+    def process_message(self):
+        
+        self.transaction = None
+        self.smtp_state = self.SMTP_COMMAND
+        self.num_bytes = 0
+        # filter, decide to deliver or reject
+        self.push('250 Ok')
 
     # Implementation of base class abstract method
     def found_terminator(self):
         line = EMPTYSTRING.join(self.received_lines)
         print('Data:', repr(line), file=debug.stream())
         self.received_lines = []
-        if self.smtp_state == self.SMTP.COMMAND:
+        if self.smtp_state == self.SMTP_COMMAND:
             self.command_terminated(line)
         else:
             self.data_terminated(line)
 
     def reset(self):
         self.transaction = None
-        self.smtp_state = self.SMTP.COMMAND
+        self.smtp_state = self.SMTP_COMMAND
     
     # SMTP and ESMTP commands
     def smtp_HELO(self, arg):
@@ -257,8 +252,7 @@ class SMTPSession(asynchat.async_chat):
             return
         # end validation
         
-        self.smtp_state = self.SMTP.DATA
-        self.data_state = self.DATA.HEADER 
-        self.set_terminator(b'\r\n\r\n')        
+        self.smtp_state = self.SMTP_DATA
+        self.data_state = self.DATA_HEADER 
         self.push('354 End data with <CR><LF>.<CR><LF>')
 
