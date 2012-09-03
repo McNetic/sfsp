@@ -1,21 +1,24 @@
 import asynchat
 import errno
+import smtplib
 import socket
 
 from sfsp import debug
-from sfsp.transaction import *
 from sfsp.client import *
+from sfsp.remoteserver import *
+from sfsp.transaction import *
 import sfsp.plugin.filter
 
 __all__ = ['SMTPSession']
 
 EMPTYSTRING = ''
-NEWLINE = '\n'
+CRLF = '\r\n'
+BCRLF = b'\r\n'
 
 class SMTPSession(asynchat.async_chat):
     SMTP_COMMAND = 0
     SMTP_DATA = 1
-    
+
     DATA_NONE = 0
     DATA_HEADER = 1
     DATA_BODY = 2
@@ -23,9 +26,9 @@ class SMTPSession(asynchat.async_chat):
     data_size_limit = 33554432
     command_size_limit = 512
 
-    def __init__(self, server, sock, address):
+    def __init__(self, sfsp, sock, address):
         asynchat.async_chat.__init__(self, sock)
-        self.smtp_server = server
+        self.sfsp = sfsp
         self.sock = sock
         self.client = SMTPClient(address)
         self.received_lines = []
@@ -33,6 +36,7 @@ class SMTPSession(asynchat.async_chat):
         self.data_state = self.DATA_NONE
         self.seen_greeting = False
         self.transaction = None
+        self.server = SMTPServer()
         self.fqdn = socket.getfqdn()
         self.num_bytes = 0
         try:
@@ -44,16 +48,24 @@ class SMTPSession(asynchat.async_chat):
             if err.args[0] != errno.ENOTCONN:
                 raise
             return
-        print('Peer:', repr(self.peer), file=debug.stream())
-        print('Address:', repr(address), file=debug.stream())
-        
-        self.push('220 %s %s' % (self.fqdn, self.smtp_server.version))
-        self.set_terminator(b'\r\n')
+        print('Peer:', repr(self.peer), file = debug.stream())
+        print('Address:', repr(address), file = debug.stream())
+
+        self.push('220 %s %s' % (self.fqdn, self.sfsp.version))
+        self.set_terminator(BCRLF)
         self.last_line = None
 
     # Overrides base class for convenience
     def push(self, msg):
-        asynchat.async_chat.push(self, bytes(msg + '\r\n', 'ascii'))
+        asynchat.async_chat.push(self, bytes(msg + CRLF, 'ascii'))
+
+    def pushReply(self, reply):
+        resp = str(reply[1], 'ascii').split(CRLF)
+        msg = str(reply[0])
+        if 1 < len(resp):
+            msg += '-' + (CRLF + reply[0] + '-').join(resp[:-1]) + reply[0]
+        msg += ' ' + resp[-1]
+        self.push(msg)
 
     # Implementation of base class abstract method
     def collect_incoming_data(self, data):
@@ -83,7 +95,7 @@ class SMTPSession(asynchat.async_chat):
             arg = None
         else:
             command = line[:i].upper()
-            arg = line[i+1:].strip()
+            arg = line[i + 1:].strip()
         method = getattr(self, 'smtp_' + command, None)
         if not method:
             self.push('502 Error: command "%s" not implemented' % command)
@@ -100,36 +112,40 @@ class SMTPSession(asynchat.async_chat):
             self.push('552 Error: Too much mail data')
             self.num_bytes = 0
             return
-        
+
         if '.' == line:
             # end of transaction
             self.process_message()
-            self.data_state = self.DATA_NONE        
-        
-        # Remove extraneous carriage returns and de-transparency according
-        # to RFC 821, Section 4.5.2.
-        if '.' == line[0]:
-            line = line[1:]
-        if self.DATA_HEADER == self.data_state:
-            if '' == line:
-                self.data_state = self.DATA_BODY
-            else:
-                self.transaction.headers.append(line)
+            self.data_state = self.DATA_NONE
         else:
-            self.transaction.body.append(line)    
+            # Remove extraneous carriage returns and de-transparency according
+            # to RFC 821, Section 4.5.2.
+            if line and '.' == line[0]:
+                line = line[1:]
+            if self.DATA_HEADER == self.data_state:
+                if '' == line:
+                    print("end of headers", file = debug.stream())
+                    self.data_state = self.DATA_BODY
+                else:
+                    self.transaction.appendHeaderLine(line)
+            else:
+                self.transaction.appendBodyLine(line)
 
     def process_message(self):
-        
+        # filter, decide to deliver or reject
+        #print("### Processing message ###", file = debug.stream())
+        #print(self.transaction.completeMessage(), file = debug.stream())
+        #print("### EOM ###", file = debug.stream())
+
         self.transaction = None
         self.smtp_state = self.SMTP_COMMAND
         self.num_bytes = 0
-        # filter, decide to deliver or reject
         self.push('250 Ok')
 
     # Implementation of base class abstract method
     def found_terminator(self):
         line = EMPTYSTRING.join(self.received_lines)
-        print('Data:', repr(line), file=debug.stream())
+        print('Data:', repr(line), file = debug.stream())
         self.received_lines = []
         if self.smtp_state == self.SMTP_COMMAND:
             self.command_terminated(line)
@@ -139,7 +155,7 @@ class SMTPSession(asynchat.async_chat):
     def reset(self):
         self.transaction = None
         self.smtp_state = self.SMTP_COMMAND
-    
+
     # SMTP and ESMTP commands
     def smtp_HELO(self, arg):
         # protocol validation (rfc8321)
@@ -147,7 +163,7 @@ class SMTPSession(asynchat.async_chat):
             self.push('501 Syntax: HELO hostname')
             return
         # end validation
-        
+
         self.reset()
         self.client.pretense = arg
         self.seen_greeting = True
@@ -159,7 +175,7 @@ class SMTPSession(asynchat.async_chat):
             self.push('501 Syntax: NOOP')
             return
         # end validation
-        
+
         self.push('250 Ok')
 
     def smtp_QUIT(self, arg):
@@ -168,7 +184,8 @@ class SMTPSession(asynchat.async_chat):
             self.push('501 Syntax: QUIT')
             return
         # end validation
-        
+
+        self.server.quit_if_needed()
         self.push('221 Bye')
         self.close_when_done()
 
@@ -176,7 +193,8 @@ class SMTPSession(asynchat.async_chat):
     def __getaddr(self, keyword, arg):
         address = None
         keylen = len(keyword)
-        if arg[:keylen].upper() != keyword:
+        print(arg[:keylen].upper(), keyword, file = debug.stream())
+        if arg[:keylen].upper() == keyword:
             address = arg[keylen:].strip()
             if not address:
                 pass
@@ -188,27 +206,47 @@ class SMTPSession(asynchat.async_chat):
         return address
 
     def smtp_MAIL(self, arg):
-        print('===> MAIL', arg, file=debug.stream())
+        print('===> MAIL', arg, file = debug.stream())
         # protocol validation (rfc8321)
         if not self.seen_greeting:
             self.push('503 Error: MAIL before (EH|HE)LO')
+            return
+        if self.transaction:
+            self.push('503 Error: nested MAIL command')
             return
         address = self.__getaddr('FROM:', arg) if arg else None
         if not address:
             self.push('501 Syntax: MAIL FROM:<address>')
             return
-        if self.transaction:
-            self.push('503 Error: nested MAIL command')
+        # target smtp validation
+        try:
+            reply = self.server.connect_if_needed(self.sfsp.options.remoteaddress, self.sfsp.options.remoteport)
+            if 220 != reply[0]:
+                # TODO: maybe only forward 421?
+                self.pushReply(reply)
+                return
+        except Exception:
+            self.push('451 Error in processing (connection to remote smtp server failed)')
+            return
+        try:
+            self.server.ehlo_or_helo_if_needed()
+        except smtplib.SMTPHeloError as excpt:
+            self.push('451 Error in processing (' + excpt.resp + ')')
+            return
+        try:
+            reply = self.server.mail(address)
+        except Exception:
+            self.push('451 Error in processing (connection to remote smtp server failed)')
             return
         # end validation
-        
+
         self.transaction = SMTPTransaction(address)
-        
-        print('sender:', self.transaction.mailfrom, file=debug.stream())
+
+        print('sender:', self.transaction.mailfrom, file = debug.stream())
         self.push('250 Ok')
 
     def smtp_RCPT(self, arg):
-        print('===> RCPT', arg, file=debug.stream())
+        print('===> RCPT', arg, file = debug.stream())
         # protocol validation (rfc8321)
         if not self.transaction:
             self.push('503 Error: need MAIL command')
@@ -217,18 +255,28 @@ class SMTPSession(asynchat.async_chat):
         if not address:
             self.push('501 Syntax: RCPT TO: <address>')
             return
+        # target smtp validation
+        try:
+            reply = self.server.rcpt(address)
+            if 250 != reply[0]:
+                # TODO: maybe examine reply?
+                self.pushReply(reply)
+        except Exception:
+            self.push('451 Error in processing')
+            raise
+            return
         # end validation
-        
+
         result = sfsp.plugin.filter.Filter.validateRecipient(self, address)
         if 250 != result.mainresult.smtp_error:
             self.push("{} {}".format(result.mainresult.smtp_error, result.mainresult.message))
-            return 
-        
-        
+            return
+
+
         # end filtering
-        
+
         self.transaction.addRecipient(address)
-        print('recips:', self.transaction.recipients, file=debug.stream())
+        print('recips:', self.transaction.recipients, file = debug.stream())
         self.push('250 Ok')
 
     def smtp_RSET(self, arg):
@@ -237,7 +285,7 @@ class SMTPSession(asynchat.async_chat):
             self.push('501 Syntax: RSET')
             return
         # end validation
-        
+
         # Resets the sender, recipients, and data, but not the greeting
         self.reset()
         self.push('250 Ok')
@@ -251,8 +299,8 @@ class SMTPSession(asynchat.async_chat):
             self.push('501 Syntax: DATA')
             return
         # end validation
-        
+
         self.smtp_state = self.SMTP_DATA
-        self.data_state = self.DATA_HEADER 
+        self.data_state = self.DATA_HEADER
         self.push('354 End data with <CR><LF>.<CR><LF>')
 

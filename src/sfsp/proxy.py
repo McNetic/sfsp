@@ -7,16 +7,15 @@ from sfsp import debug
 
 class Proxy(asyncore.dispatcher):
 
-    def __init__(self, localaddr, remoteaddr, version):
-        self._localaddr = localaddr
-        self._remoteaddr = remoteaddr
+    def __init__(self, options, version):
+        self.options = options
         self.version = version
         asyncore.dispatcher.__init__(self)
         try:
             self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
             # try to re-use a server port if possible
             self.set_reuse_addr()
-            self.bind(localaddr)
+            self.bind((self.options.localaddress, self.options.localport))
             self.listen(5)
         except:
             self.close()
@@ -24,13 +23,13 @@ class Proxy(asyncore.dispatcher):
         else:
             print('%s started at %s\n\tLocal addr: %s\n\tRemote addr:%s' % (
                 self.__class__.__name__, time.ctime(time.time()),
-                localaddr, remoteaddr), file=debug.stream())
+                (self.options.localaddress, self.options.localport), (self.options.remoteaddress, self.options.remoteport)), file = debug.stream())
 
     def run(self):
         asyncore.loop()
 
     def handle_accepted(self, socket, addr):
-        print('Incoming connection from %s' % repr(addr), file=debug.stream())
+        print('Incoming connection from %s' % repr(addr), file = debug.stream())
         channel = SMTPSession(self, socket, addr)
 
     # API for "doing something useful with the message"

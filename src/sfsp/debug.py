@@ -7,7 +7,7 @@ class Devnull:
     def flush(self): pass
 
 class Debug:
-    stream = Devnull()    
+    stream = Devnull()
 
 def enable(debugstream = sys.stderr):
     Debug.stream = debugstream
