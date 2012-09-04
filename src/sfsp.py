@@ -6,7 +6,7 @@ Created on 28.08.2012
 '''
 """An RFC 2821 smtp proxy.
 
-Usage: %(program)s [options] [localhost:localport [remotehost:remoteport]]
+Usage: %(program)s [options]
 
 Options:
 
@@ -65,7 +65,7 @@ import getopt
 import sfsp
 from sfsp import debug
 
-__all__ = ["SMTPServer","PureProxy"]
+__all__ = ["SMTPServer", "PureProxy"]
 
 program = sys.argv[0]
 __version__ = 'Python SMTP proxy version 0.2'
@@ -75,10 +75,10 @@ COMMASPACE = ', '
 
 
 
-def usage(code, msg=''):
-    print(__doc__ % globals(), file=sys.stderr)
+def usage(code, msg = ''):
+    print(__doc__ % globals(), file = sys.stderr)
     if msg:
-        print(msg, file=sys.stderr)
+        print(msg, file = sys.stderr)
     sys.exit(code)
 
 
@@ -86,60 +86,52 @@ def usage(code, msg=''):
 
 class Options:
     setuid = 1
+    localaddress = 'localhost'
+    localport = 8025
+    remoteaddress = 'localhost'
+    remoteport = 25
 
 
 def parseargs():
     try:
         opts, args = getopt.getopt(
-            sys.argv[1:], 'nVhc:d',
-            ['class=', 'nosetuid', 'version', 'help', 'debug'])
+            sys.argv[1:], 'c:dhnp:P:s:S:V',
+            ['class=', 'debug', 'help', 'nosetuid', 'localport=', 'remoteport=', 'localhost=', 'remotehost=', 'version'])
     except getopt.error as e:
         usage(1, e)
 
     options = Options()
     for opt, arg in opts:
-        if opt in ('-h', '--help'):
-            usage(0)
-        elif opt in ('-V', '--version'):
-            print(__version__, file=sys.stderr)
-            sys.exit(0)
-        elif opt in ('-n', '--nosetuid'):
-            options.setuid = 0
-        elif opt in ('-c', '--class'):
+        if opt in ('-c', '--class'):
             options.classname = arg
         elif opt in ('-d', '--debug'):
             debug.enable()
+        elif opt in ('-h', '--help'):
+            usage(0)
+        elif opt in ('-n', '--nosetuid'):
+            options.setuid = 0
+        elif opt in ('-p', '--remoteport'):
+            try:
+                options.remoteport = int(arg)
+            except ValueError:
+                    usage(1, 'Bad remote port: %s' % arg)
+        elif opt in ('-P', '--localport'):
+            try:
+                options.localport = int(arg)
+            except ValueError:
+                    usage(1, 'Bad local port: %s' % arg)
+        elif opt in ('-s', '--remotehost'):
+            options.remoteaddress = arg
+        elif opt in ('-S', '--localhost'):
+            options.localaddress = arg
+        elif opt in ('-V', '--version'):
+            print(__version__, file = sys.stderr)
+            sys.exit(0)
 
     # parse the rest of the arguments
-    if len(args) < 1:
-        localspec = 'localhost:8025'
-        remotespec = 'localhost:25'
-    elif len(args) < 2:
-        localspec = args[0]
-        remotespec = 'localhost:25'
-    elif len(args) < 3:
-        localspec = args[0]
-        remotespec = args[1]
-    else:
+    if 0 < len(args):
         usage(1, 'Invalid arguments: %s' % COMMASPACE.join(args))
 
-    # split into host/port pairs
-    i = localspec.find(':')
-    if i < 0:
-        usage(1, 'Bad local spec: %s' % localspec)
-    options.localhost = localspec[:i]
-    try:
-        options.localport = int(localspec[i+1:])
-    except ValueError:
-        usage(1, 'Bad local port: %s' % localspec)
-    i = remotespec.find(':')
-    if i < 0:
-        usage(1, 'Bad remote spec: %s' % remotespec)
-    options.remotehost = remotespec[:i]
-    try:
-        options.remoteport = int(remotespec[i+1:])
-    except ValueError:
-        usage(1, 'Bad remote port: %s' % remotespec)
     return options
 
 def load_plugin(plugin):
@@ -147,29 +139,30 @@ def load_plugin(plugin):
         __import__(plugin)
         sfsp.plugin.Plugin.registerModule(plugin)
     except ImportError:
-        print('Cannot import module "{}"'.format(plugin), file=sys.stderr)
+        print('Cannot import module "{}"'.format(plugin), file = sys.stderr)
 
 def load_plugins():
     load_plugin('plugins.greylisting')
+    load_plugin('plugins.delay')
+    pass
 
 if __name__ == '__main__':
     options = parseargs()
     load_plugins()
-    proxy = sfsp.Proxy((options.localhost, options.localport),
-                   (options.remotehost, options.remoteport), __version__)
+    proxy = sfsp.Proxy(options, __version__)
     # Become nobody
     if options.setuid:
         try:
             import pwd
         except ImportError:
-            print('Cannot import module "pwd"; try running with -n option.', file=sys.stderr)
+            print('Cannot import module "pwd"; try running with -n option.', file = sys.stderr)
             sys.exit(1)
         nobody = pwd.getpwnam('nobody')[2]
         try:
             os.setuid(nobody)
         except OSError as e:
             if e.errno != errno.EPERM: raise
-            print('Cannot setuid "nobody"; try running with -n option.', file=sys.stderr)
+            print('Cannot setuid "nobody"; try running with -n option.', file = sys.stderr)
             sys.exit(1)
     try:
         proxy.run()

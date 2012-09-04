@@ -5,6 +5,7 @@ import socket
 
 from sfsp import debug
 from sfsp.client import *
+import sfsp.plugin.event as event
 from sfsp.remoteserver import *
 from sfsp.transaction import *
 import sfsp.plugin.filter
@@ -27,6 +28,7 @@ class SMTPSession(asynchat.async_chat):
     command_size_limit = 512
 
     def __init__(self, sfsp, sock, address):
+        event.StartSession.notify()
         asynchat.async_chat.__init__(self, sock)
         self.sfsp = sfsp
         self.sock = sock
@@ -51,9 +53,10 @@ class SMTPSession(asynchat.async_chat):
         print('Peer:', repr(self.peer), file = debug.stream())
         print('Address:', repr(address), file = debug.stream())
 
-        self.push('220 %s %s' % (self.fqdn, self.sfsp.version))
         self.set_terminator(BCRLF)
         self.last_line = None
+        event.SendSMTPBanner.notify()
+        self.push('220 %s %s' % (self.fqdn, self.sfsp.version))
 
     # Overrides base class for convenience
     def push(self, msg):
@@ -66,6 +69,14 @@ class SMTPSession(asynchat.async_chat):
             msg += '-' + (CRLF + reply[0] + '-').join(resp[:-1]) + reply[0]
         msg += ' ' + resp[-1]
         self.push(msg)
+
+    def sendReply(self, reply, evt = None):
+        if evt:
+            evt.notify()
+        if isinstance(reply, 'str'):
+            self.push(reply)
+        else:
+            self.pushReply(reply)
 
     # Implementation of base class abstract method
     def collect_incoming_data(self, data):
@@ -140,7 +151,19 @@ class SMTPSession(asynchat.async_chat):
         self.transaction = None
         self.smtp_state = self.SMTP_COMMAND
         self.num_bytes = 0
-        self.push('250 Ok')
+
+        # TODO: content filtering here.
+
+        # finally, delivery
+        try:
+            (code, reply) = self.server.data_data(self.transaction.completeMessage())
+            # DO NOT DO ANYTHING OR SEND ANYTHING OTHER THAN 250 AFTER SUCCESSFUL DELIVERY!
+            if 250 != code:
+                self.sendReply((code, reply))
+            else:
+                self.push('250 Ok')
+        except Exception:
+            self.push('451 Error in processing')
 
     # Implementation of base class abstract method
     def found_terminator(self):
@@ -154,20 +177,22 @@ class SMTPSession(asynchat.async_chat):
 
     def reset(self):
         self.transaction = None
+        self.server.reset_if_needed()
         self.smtp_state = self.SMTP_COMMAND
 
     # SMTP and ESMTP commands
     def smtp_HELO(self, arg):
+        event.ReceivedSMTPHelo.notify()
         # protocol validation (rfc8321)
         if not arg:
-            self.push('501 Syntax: HELO hostname')
+            self.sendReply('501 Syntax: HELO hostname', event.SendSMTPHeloResponse)
             return
         # end validation
 
         self.reset()
         self.client.pretense = arg
         self.seen_greeting = True
-        self.push('250 %s' % self.fqdn)
+        self.sendReply((250, self.fqdn), event.SendSMTPHeloResponse)
 
     def smtp_NOOP(self, arg):
         # protocol validation (rfc8321)
@@ -206,70 +231,76 @@ class SMTPSession(asynchat.async_chat):
         return address
 
     def smtp_MAIL(self, arg):
+        event.ReceivedSMTPMail.notify()
         print('===> MAIL', arg, file = debug.stream())
         # protocol validation (rfc8321)
         if not self.seen_greeting:
-            self.push('503 Error: MAIL before (EH|HE)LO')
+            self.sendReply('503 Error: MAIL before (EH|HE)LO', event.SendSMTPMailResponse)
             return
         if self.transaction:
-            self.push('503 Error: nested MAIL command')
+            self.sendReply('503 Error: nested MAIL command', event.SendSMTPMailResponse)
             return
         address = self.__getaddr('FROM:', arg) if arg else None
         if not address:
-            self.push('501 Syntax: MAIL FROM:<address>')
+            self.sendReply('501 Syntax: MAIL FROM:<address>', event.SendSMTPMailResponse)
             return
         # target smtp validation
         try:
-            reply = self.server.connect_if_needed(self.sfsp.options.remoteaddress, self.sfsp.options.remoteport)
-            if 220 != reply[0]:
+            (code, reply) = self.server.connect_if_needed(self.sfsp.options.remoteaddress, self.sfsp.options.remoteport)
+            if 220 != code:
                 # TODO: maybe only forward 421?
-                self.pushReply(reply)
+                self.sendReply((code, reply), event.SendSMTPMailResponse)
                 return
         except Exception:
-            self.push('451 Error in processing (connection to remote smtp server failed)')
+            self.sendReply('451 Error in processing (connection to remote smtp server failed)', event.SendSMTPMailResponse)
             return
         try:
             self.server.ehlo_or_helo_if_needed()
         except smtplib.SMTPHeloError as excpt:
-            self.push('451 Error in processing (' + excpt.resp + ')')
+            self.sendReply('451 Error in processing (' + excpt.resp + ')', event.SendSMTPMailResponse)
             return
         try:
-            reply = self.server.mail(address)
+            (code, reply) = self.server.mail(address)
+            # TODO: process reply code
+            if 250 != code:
+                self.sendReply((code, reply), event.SendSMTPMailResponse)
+                return
         except Exception:
-            self.push('451 Error in processing (connection to remote smtp server failed)')
+            self.sendReply('451 Error in processing (connection to remote smtp server failed)', event.SendSMTPMailResponse)
             return
         # end validation
 
         self.transaction = SMTPTransaction(address)
 
         print('sender:', self.transaction.mailfrom, file = debug.stream())
-        self.push('250 Ok')
+        self.sendReply('250 Ok', event.SendSMTPMailResponse)
 
     def smtp_RCPT(self, arg):
+        event.ReceivedSMTPRcpt.notify()
         print('===> RCPT', arg, file = debug.stream())
         # protocol validation (rfc8321)
         if not self.transaction:
-            self.push('503 Error: need MAIL command')
+            self.sendReply('503 Error: need MAIL command', event.ReceivedSMTPRcpt)
             return
         address = self.__getaddr('TO:', arg) if arg else None
         if not address:
-            self.push('501 Syntax: RCPT TO: <address>')
+            self.sendReply('501 Syntax: RCPT TO: <address>', event.ReceivedSMTPRcpt)
             return
         # target smtp validation
         try:
-            reply = self.server.rcpt(address)
-            if 250 != reply[0]:
+            (code, reply) = self.server.rcpt(address)
+            if 250 != code:
                 # TODO: maybe examine reply?
-                self.pushReply(reply)
+                self.sendReply((code, reply), event.ReceivedSMTPRcpt)
+                return
         except Exception:
-            self.push('451 Error in processing')
-            raise
+            self.sendReply('451 Error in processing', event.ReceivedSMTPRcpt)
             return
         # end validation
 
         result = sfsp.plugin.filter.Filter.validateRecipient(self, address)
         if 250 != result.mainresult.smtp_error:
-            self.push("{} {}".format(result.mainresult.smtp_error, result.mainresult.message))
+            self.sendReply((result.mainresult.smtp_error, result.mainresult.message), event.ReceivedSMTPRcpt)
             return
 
 
@@ -277,7 +308,7 @@ class SMTPSession(asynchat.async_chat):
 
         self.transaction.addRecipient(address)
         print('recips:', self.transaction.recipients, file = debug.stream())
-        self.push('250 Ok')
+        self.sendReply('250 Ok', event.ReceivedSMTPRcpt)
 
     def smtp_RSET(self, arg):
         # protocol validation (rfc8321)
@@ -297,6 +328,17 @@ class SMTPSession(asynchat.async_chat):
             return
         if arg:
             self.push('501 Syntax: DATA')
+            return
+        # TODO: have recipients?
+        # target smtp validation
+        try:
+            (code, reply) = self.server.data_cmd()
+            if 354 != code:
+                #TODO: maybe react to different codes 
+                self.push('451 Error in processing')
+                return
+        except Exception:
+            self.push('451 Error in processing')
             return
         # end validation
 

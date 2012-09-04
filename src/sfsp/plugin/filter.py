@@ -30,7 +30,7 @@ class Filter(sfsp.plugin.Plugin):
 
     @staticmethod
     def validateRecipient(session, address):
-        return sfsp.plugin.event.ValidateRecipient.probe(FilterResult(), session, address)
+        return sfsp.plugin.event.ValidateRecipient.probe(FilterResultOK, session, address)
 
 
 FilterResultOK = FilterResult(errorlevel = FilterResult.OK, message = 'Ok', smtp_error = 250);
