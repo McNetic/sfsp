@@ -31,6 +31,7 @@ class Proxy(asyncore.dispatcher):
     def handle_accepted(self, socket, addr):
         print('Incoming connection from %s' % repr(addr), file = debug.stream())
         channel = SMTPSession(self, socket, addr)
+        channel.initSMTP()
 
     # API for "doing something useful with the message"
     def process_message(self, peer, mailfrom, rcpttos, data):

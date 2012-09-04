@@ -20,17 +20,14 @@ class FilterResult(sfsp.plugin.event.EventResult):
         self.message = message
         self.smtp_error = smtp_error
 
-class Filter(sfsp.plugin.Plugin):
+class Filter():
     '''
     classdocs
     '''
 
-    def __init__(self):
-        sfsp.plugin.Plugin.__init__(self)
-
     @staticmethod
-    def validateRecipient(session, address):
-        return sfsp.plugin.event.ValidateRecipient.probe(FilterResultOK, session, address)
+    def validateRecipient(address):
+        return sfsp.plugin.event.ValidateRecipient.probe(FilterResultOK, address)
 
 
 FilterResultOK = FilterResult(errorlevel = FilterResult.OK, message = 'Ok', smtp_error = 250);

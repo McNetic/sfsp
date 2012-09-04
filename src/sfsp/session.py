@@ -28,8 +28,7 @@ class SMTPSession(asynchat.async_chat):
     command_size_limit = 512
 
     def __init__(self, sfsp, sock, address):
-        event.StartSession.notify()
-        asynchat.async_chat.__init__(self, sock)
+        super().__init__(sock)
         self.sfsp = sfsp
         self.sock = sock
         self.client = SMTPClient(address)
@@ -39,10 +38,15 @@ class SMTPSession(asynchat.async_chat):
         self.seen_greeting = False
         self.transaction = None
         self.server = SMTPServer()
-        self.fqdn = socket.getfqdn()
         self.num_bytes = 0
+        self.set_terminator(BCRLF)
+        self.last_line = None
+
+    def initSMTP(self):
+        event.StartSession.notify()
+        self.fqdn = socket.getfqdn()
         try:
-            self.peer = sock.getpeername()
+            self.peer = self.sock.getpeername()
         except socket.error as err:
             # a race condition  may occur if the other end is closing
             # before we can get the peername
@@ -51,19 +55,22 @@ class SMTPSession(asynchat.async_chat):
                 raise
             return
         print('Peer:', repr(self.peer), file = debug.stream())
-        print('Address:', repr(address), file = debug.stream())
-
-        self.set_terminator(BCRLF)
-        self.last_line = None
+        print('Address:', repr(self.client.address), file = debug.stream())
         event.SendSMTPBanner.notify()
         self.push('220 %s %s' % (self.fqdn, self.sfsp.version))
 
+
+
     # Overrides base class for convenience
     def push(self, msg):
-        asynchat.async_chat.push(self, bytes(msg + CRLF, 'ascii'))
+        super().push(bytes(msg + CRLF, 'ascii'))
 
     def pushReply(self, reply):
-        resp = str(reply[1], 'ascii').split(CRLF)
+        if isinstance(reply[1], str):
+            resp = reply[1]
+        else:
+            resp = str(reply[1], 'ascii')
+        resp = resp.split(CRLF)
         msg = str(reply[0])
         if 1 < len(resp):
             msg += '-' + (CRLF + reply[0] + '-').join(resp[:-1]) + reply[0]
@@ -73,7 +80,7 @@ class SMTPSession(asynchat.async_chat):
     def sendReply(self, reply, evt = None):
         if evt:
             evt.notify()
-        if isinstance(reply, 'str'):
+        if isinstance(reply, str):
             self.push(reply)
         else:
             self.pushReply(reply)
@@ -298,7 +305,7 @@ class SMTPSession(asynchat.async_chat):
             return
         # end validation
 
-        result = sfsp.plugin.filter.Filter.validateRecipient(self, address)
+        result = sfsp.plugin.filter.Filter.validateRecipient(address)
         if 250 != result.mainresult.smtp_error:
             self.sendReply((result.mainresult.smtp_error, result.mainresult.message), event.ReceivedSMTPRcpt)
             return

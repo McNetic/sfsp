@@ -11,6 +11,10 @@ from sfsp.plugin import *
 @plugin()
 class Delay():
 
-    @event.listener(event.SendSMTPBanner, scope = event.Scope.SESSION)
-    def SendSMPTBanner(self):
+    @event.listener(event.StartSession)
+    def StartSession(self, event, session):
+        print(session.data_size_limit)
+
+    @event.listener(event.SendSMTPBanner)
+    def SendSMPTBanner(self, event, session):
         pass

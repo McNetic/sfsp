@@ -15,26 +15,29 @@ class Plugin():
         pass
 
 
-    @staticmethod
-    def registerModule(module):
-        Plugin.loadedModules.add(module)
+    @classmethod
+    def registerModule(cls, module):
+        cls.loadedModules.add(module)
 
-    @staticmethod
-    def registerPlugin(pluginClass):
+    @classmethod
+    def registerPlugin(cls, pluginClass, pluginScope):
         print('loading plugin', pluginClass.__name__, 'from', pluginClass.__module__, file = debug.stream())
         plugin = pluginClass()
         for key, func in pluginClass.__dict__.items():
             if hasattr(func, 'eventListener'):
-                for (evt, scope) in getattr(func, 'eventListener'):
-                    evt.register(plugin, key, scope)
-        Plugin.loadedPlugins.add(plugin)
+                for evt in getattr(func, 'eventListener'):
+                    evt.register(plugin, key)
+        cls.loadedPlugins.add(plugin)
 
 class plugin:
     """
         Decorator for all plugins
     """
+    def __init__(self, scope = event.Scope.GLOBAL):
+        self.scope = scope
+
     def __call__(self, cls):
 
-        Plugin.registerPlugin(cls)
+        Plugin.registerPlugin(cls, self.scope)
 
         return cls

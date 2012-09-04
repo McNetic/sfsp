@@ -4,6 +4,9 @@ Created on 31.08.2012
 @author: ehe
 '''
 
+import inspect
+import sfsp.session
+
 class Scope():
     GLOBAL = 0
     SESSION = 1
@@ -34,9 +37,9 @@ class Event():
 
     lastEventID = 1
 
-    @staticmethod
-    def getNextEventID():
-        return + +Event.lastEventID
+    @classmethod
+    def getNextEventID(cls):
+        return + +cls.lastEventID
 
     def __init__(self):
         self.eventID = Event.getNextEventID()
@@ -60,32 +63,42 @@ class Event():
             resultlist.setMainResult(defaultresult)
         return resultlist
 
-    def register(self, plugin, method, scope):
+    def register(self, plugin, method):
         # todo: check valid event
-        self.listeners.add(EventListener(plugin, method, scope))
+        self.listeners.add(EventListener(plugin, method))
+
+class SessionWrapper(object):
+
+    def __init__(self, session):
+        self._session = session
+
+    def __getattr__(self, attr):
+        return getattr(self._session, attr)
 
 class EventListener():
 
-    def __init__(self, module, method, scope):
+    def __init__(self, module, method):
         self.module = module
         self.method = method
-        self.scope = scope
+
+    def getSessionObject(self):
+        for frame in inspect.stack():
+            if 'self' in frame[0].f_locals and sfsp.session.SMTPSession == frame[0].f_locals['self'].__class__:
+                return SessionWrapper(frame[0].f_locals['self'])
 
     def __call__(self, evt, *args):
-        return getattr(self.module, self.method)(evt, *args)
+        return getattr(self.module, self.method)(evt, self.getSessionObject(), * args)
 
 class listener:
     '''decorator for event listening methods'''
 
-    def __init__(self, event, scope = Scope.GLOBAL):
+    def __init__(self, event):
         self.event = event
-        self.scope = scope
 
     def __call__(self, func):
-
         if not hasattr(func, 'eventListener'):
             func.eventListener = set()
-        func.eventListener.add((self.event, self.scope))
+        func.eventListener.add(self.event)
 
         return func
 

@@ -30,8 +30,8 @@ class Greylisting():
         return filter.FilterResult(filter.FilterResult.ERROR, "Please try again later", 451)
 
     @event.listener(event.ValidateRecipient)
-    def validateRecipient(self, evt, address):
-        triplet = (self.session.peer[0], self.session.transaction.mailfrom, address)
+    def validateRecipient(self, evt, session, address):
+        triplet = (session.peer[0], session.transaction.mailfrom, address)
         if triplet in Greylisting.whitetriplets:
             print("found triplet", triplet, "in whitelist, accepting", file = debug.stream())
             return self.passed()
