@@ -1,7 +1,7 @@
 from sfsp import debug
 from sfsp.plugin import event
 
-__all__ = ['plugin', 'event']
+__all__ = ['plugin', 'event', 'filter']
 
 class PluginException(Exception):
     pass
