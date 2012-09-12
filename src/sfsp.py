@@ -91,6 +91,11 @@ class Options:
     remoteaddress = 'localhost'
     remoteport = 25
 
+    delay = 0
+    defer_errors = True
+
+
+
 
 def parseargs():
     try:
@@ -134,16 +139,16 @@ def parseargs():
 
     return options
 
-def load_plugin(plugin):
+def load_plugin(plugin, *args):
     try:
         __import__(plugin)
-        sfsp.plugin.Plugin.registerModule(plugin)
+        sfsp.plugin.Plugin.registerModule(plugin, *args)
     except ImportError:
         print('Cannot import module "{}"'.format(plugin), file = sys.stderr)
 
 def load_plugins():
-    load_plugin('plugins.greylisting')
-    load_plugin('plugins.delay')
+    #load_plugin('plugins.greylisting')
+    load_plugin('plugins.delay', options.delay)
     pass
 
 if __name__ == '__main__':

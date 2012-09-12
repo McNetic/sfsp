@@ -11,7 +11,7 @@ from sfsp import debug
 
 @plugin()
 class Delay():
-    delay = 20
+    delay = 0
 
     def __init__(self):
         self.start_time = 0
@@ -28,5 +28,7 @@ class Delay():
     @event.listener(event.SendSMTPMailResponse)
     @event.listener(event.SendSMTPRcptResponse)
     def SendSMPTBanner(self, event, session):
-        print("Delaying for %d seconds" % (Delay.delay - (time.time() - self.start_time)), file = debug.stream())
-        time.sleep(Delay.delay - (time.time() - self.start_time))
+        delay = int(Delay.delay - (time.time() - self.start_time))
+        if 0 < delay:
+            print("Delaying for %d seconds" % delay, file = debug.stream())
+            time.sleep(delay)

@@ -16,7 +16,7 @@ class Plugin():
 
 
     @classmethod
-    def registerModule(cls, module):
+    def registerModule(cls, module, *args):
         cls.loadedModules.add(module)
 
     @classmethod

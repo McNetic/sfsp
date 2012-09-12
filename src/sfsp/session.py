@@ -16,6 +16,12 @@ EMPTYSTRING = ''
 CRLF = '\r\n'
 BCRLF = b'\r\n'
 
+class ErrorState:
+
+    def __init__(self):
+        self.state = 0
+
+
 class SMTPSession(asynchat.async_chat):
     SMTP_COMMAND = 0
     SMTP_DATA = 1
@@ -35,6 +41,7 @@ class SMTPSession(asynchat.async_chat):
         self.received_lines = []
         self.smtp_state = self.SMTP_COMMAND
         self.data_state = self.DATA_NONE
+        self.error_state = ErrorState()
         self.seen_greeting = False
         self.transaction = None
         self.server = SMTPServer()
@@ -56,6 +63,7 @@ class SMTPSession(asynchat.async_chat):
             return
         print('Peer:', repr(self.peer), file = debug.stream())
         print('Address:', repr(self.client.address), file = debug.stream())
+        # TODO: dns blacklists etc, make possible to error out here!
         event.SendSMTPBanner.notify()
         self.push('220 %s %s' % (self.fqdn, self.sfsp.version))
 
@@ -155,10 +163,6 @@ class SMTPSession(asynchat.async_chat):
         #print(self.transaction.completeMessage(), file = debug.stream())
         #print("### EOM ###", file = debug.stream())
 
-        self.transaction = None
-        self.smtp_state = self.SMTP_COMMAND
-        self.num_bytes = 0
-
         # TODO: content filtering here.
 
         # finally, delivery
@@ -171,6 +175,11 @@ class SMTPSession(asynchat.async_chat):
                 self.push('250 Ok')
         except Exception:
             self.push('451 Error in processing')
+            raise
+
+        self.transaction = None
+        self.smtp_state = self.SMTP_COMMAND
+        self.num_bytes = 0
 
     # Implementation of base class abstract method
     def found_terminator(self):
