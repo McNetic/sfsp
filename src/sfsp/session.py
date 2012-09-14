@@ -8,6 +8,7 @@ from sfsp.client import *
 import sfsp.plugin.event as event
 from sfsp.remoteserver import *
 from sfsp.transaction import *
+from sfsp.error import *
 import sfsp.plugin.filter
 
 __all__ = ['SMTPSession']
