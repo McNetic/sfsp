@@ -15,9 +15,8 @@ class FilterResult(sfsp.plugin.event.EventResult):
     TRANSACTION_FATAL = 6
     SESSION_FATAL = 7
 
-    def __init__(self, errorlevel, message, smtp_error):
-        self.errorlevel = errorlevel
-        self.message = message
+    def __init__(self, errorlevel, faillevel , message, smtp_error):
+        super().__init__(errorlevel, faillevel, message)
         self.smtp_error = smtp_error
 
 class Filter():
@@ -29,5 +28,9 @@ class Filter():
     def validateRecipient(address):
         return sfsp.plugin.event.ValidateRecipient.probe(FilterResultOK, address)
 
+    @staticmethod
+    def validateClientAddress(client):
+        return sfsp.plugin.event.ValidateClientAddress.probe(FilterResultOK, client)
 
-FilterResultOK = FilterResult(errorlevel = FilterResult.OK, message = 'Ok', smtp_error = 250);
+
+FilterResultOK = FilterResult(errorlevel = FilterResult.OK, faillevel = FilterResult.FAIL_NOT, message = 'Ok', smtp_error = 250);

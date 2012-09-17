@@ -22,12 +22,15 @@ class Plugin():
     @classmethod
     def registerPlugin(cls, pluginClass, pluginScope):
         print('loading plugin', pluginClass.__name__, 'from', pluginClass.__module__, file = debug.stream())
-        plugin = pluginClass()
+        if event.Scope.GLOBAL == pluginScope:
+            plugin = pluginClass()
+        else:
+            plugin = pluginClass
         for key, func in pluginClass.__dict__.items():
             if hasattr(func, 'eventListener'):
                 for evt in getattr(func, 'eventListener'):
-                    evt.register(plugin, key)
-        cls.loadedPlugins.add(plugin)
+                    evt.register(plugin, key, pluginScope)
+        cls.loadedPlugins.add(pluginClass)
 
 class plugin:
     """

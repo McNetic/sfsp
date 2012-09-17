@@ -9,7 +9,7 @@ import time
 from sfsp.plugin import *
 from sfsp import debug
 
-@plugin()
+@plugin(scope = event.Scope.SESSION)
 class Delay():
     delay = 0
 

@@ -61,6 +61,7 @@ import sys
 import os
 import errno
 import getopt
+import pkgutil
 
 import sfsp
 from sfsp import debug
@@ -147,8 +148,8 @@ def load_plugin(plugin, *args):
         print('Cannot import module "{}"'.format(plugin), file = sys.stderr)
 
 def load_plugins():
-    #load_plugin('plugins.greylisting')
-    load_plugin('plugins.delay', options.delay)
+    for _, plugin, _ in pkgutil.iter_modules(['plugins']):
+        load_plugin('plugins.%s' % plugin)
     pass
 
 if __name__ == '__main__':

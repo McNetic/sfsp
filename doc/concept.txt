@@ -21,6 +21,8 @@
     * archiv
   * sqlite
   
+IDEEN:
+  * plugins mit priorität
   
 CONCEPT
 
@@ -43,6 +45,17 @@ Error Levels
                       continue
  * Suspicious         Suspicious client behaviour
  * Warning            (Possible unintended) malbeviour, should be reported back
+
+Filter Results:
+ * FATAL:		can not continue
+ * SEVERE:		must not continue
+ 
+ * ERROR:		should not continue
+ * POSS_ERROR:	may not continue
+ * WARNING:		should continue
+ 
+ * UNDESIRABLE:	must continue
+ * SUSPICIOUS:	must continue	
 
 Plugin Types and Capabilities
  * Filter

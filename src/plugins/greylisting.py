@@ -12,6 +12,9 @@ from sfsp.plugin import *
 def name():
     pass
 
+#TODO: persist data
+#TODO: configurable delays (general configurability)
+
 @plugin()
 class Greylisting():
     '''
@@ -27,11 +30,11 @@ class Greylisting():
         return filter.FilterResultOK
 
     def greylisted(self):
-        return filter.FilterResult(filter.FilterResult.ERROR, "Please try again later", 451)
+        return filter.FilterResult(filter.FilterResult.ERROR, filter.FilterResult.FAIL_DEFER, "Please try again later", 451)
 
     @event.listener(event.ValidateRecipient)
     def validateRecipient(self, evt, session, address):
-        triplet = (session.peer[0], session.transaction.mailfrom, address)
+        triplet = (session.client.address[0], session.transaction.mailfrom, address)
         if triplet in Greylisting.whitetriplets:
             print("found triplet", triplet, "in whitelist, accepting", file = debug.stream())
             return self.passed()

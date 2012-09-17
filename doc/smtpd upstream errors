@@ -1,2 +1,4 @@
-HELO is allowed multiple times
+generally, this is not a proxy, but a relay
+HELO is allowed multiple times without reset
 utf8 failure
+why asking the socket for peername? this is already handled in asynchore.dispatcher?

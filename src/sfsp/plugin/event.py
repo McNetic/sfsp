@@ -15,9 +15,27 @@ class EventResult():
     NONE = -1,
     OK = 0
 
-    def __init__(self, errorlevel, message):
+    FAIL_NOT = 0
+    FAIL_CHOOSE = 1
+    FAIL_DEFER = 2
+    FAIL_NOW = 3
+
+    def __init__(self, errorlevel, faillevel, message):
+        self.faillevel = faillevel
         self.errorlevel = errorlevel
         self.message = message
+
+    def failNow(self):
+        return EventResult.FAIL_NOW == self.faillevel
+
+    def failChoose(self):
+        return EventResult.FAIL_CHOOSE == self.faillevel
+
+    def failDefer(self):
+        return EventResult.FAIL_DEFER == self.faillevel
+
+    def failNot(self):
+        return EventResult.FAIL_NOT == self.faillevel
 
 class EventResultList():
 
@@ -32,6 +50,31 @@ class EventResultList():
         if self.mainresult:
             self.addResult(self.mainresult)
         self.mainresult = result
+
+    def failNow(self):
+        if self.mainresult:
+            return self.mainresult.failNow()
+        else:
+            return False
+
+    def failChoose(self):
+        if self.mainresult:
+            return self.mainresult.failChoose()
+        else:
+            return False
+
+    def failDefer(self):
+        if self.mainresult:
+            return self.mainresult.failDefer()
+        else:
+            return False
+
+    def failNot(self):
+        if self.mainresult:
+            return self.mainresult.failNot()
+        else:
+            return True
+
 
 class Event():
 
@@ -63,9 +106,9 @@ class Event():
             resultlist.setMainResult(defaultresult)
         return resultlist
 
-    def register(self, plugin, method):
+    def register(self, plugin, method, scope):
         # todo: check valid event
-        self.listeners.add(EventListener(plugin, method))
+        self.listeners.add(EventListener(plugin, method, scope))
 
 class SessionWrapper(object):
 
@@ -77,9 +120,10 @@ class SessionWrapper(object):
 
 class EventListener():
 
-    def __init__(self, module, method):
+    def __init__(self, module, method, scope):
         self.module = module
         self.method = method
+        self.scope = scope
 
     def getSessionObject(self):
         for frame in inspect.stack():
@@ -87,7 +131,11 @@ class EventListener():
                 return SessionWrapper(frame[0].f_locals['self'])
 
     def __call__(self, evt, *args):
-        return getattr(self.module, self.method)(evt, self.getSessionObject(), * args)
+        if Scope.SESSION == self.scope:
+            module = EventListener.getSessionModule()
+        else:
+            module = self.module
+        return getattr(module, self.method)(evt, self.getSessionObject(), * args)
 
 class listener:
     '''decorator for event listening methods'''
@@ -103,6 +151,7 @@ class listener:
         return func
 
 StartSession = Event()
+ValidateClientAddress = Event()
 SendSMTPBanner = Event()
 ReceivedSMTPHelo = Event()
 SendSMTPHeloResponse = Event()

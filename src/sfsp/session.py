@@ -19,6 +19,10 @@ BCRLF = b'\r\n'
 
 class ErrorState:
 
+    OK = 0
+    DEFERED = 1
+    FATAL = 2
+
     def __init__(self):
         self.state = 0
 
@@ -42,7 +46,7 @@ class SMTPSession(asynchat.async_chat):
         self.received_lines = []
         self.smtp_state = self.SMTP_COMMAND
         self.data_state = self.DATA_NONE
-        self.error_state = ErrorState()
+        self.error_state = ErrorState.OK
         self.seen_greeting = False
         self.transaction = None
         self.server = SMTPServer()
@@ -53,6 +57,7 @@ class SMTPSession(asynchat.async_chat):
     def initSMTP(self):
         event.StartSession.notify()
         self.fqdn = socket.getfqdn()
+        """ TODO: kann peer wirklich unterschiedlich sein zu address?
         try:
             self.peer = self.sock.getpeername()
         except socket.error as err:
@@ -63,12 +68,17 @@ class SMTPSession(asynchat.async_chat):
                 raise
             return
         print('Peer:', repr(self.peer), file = debug.stream())
+        """
         print('Address:', repr(self.client.address), file = debug.stream())
-        # TODO: dns blacklists etc, make possible to error out here!
-        event.SendSMTPBanner.notify()
-        self.push('220 %s %s' % (self.fqdn, self.sfsp.version))
 
+        result = sfsp.plugin.filter.Filter.validateClientAddress(self.client)
+        if result.failNow() or (not self.sfsp.options.defer_errors and result.failDefer()):
+            self.sendReply(result)
+        elif result.failChoose():
+            # TODO: choose something?
+            pass
 
+        self.sendReply((220, '%s %s' % (self.fqdn, self.sfsp.version)), event.SendSMTPBanner)
 
     # Overrides base class for convenience
     def push(self, msg):
@@ -94,6 +104,9 @@ class SMTPSession(asynchat.async_chat):
         else:
             self.pushReply(reply)
 
+    def sendOK(self, evt = None):
+        return self.sendReply((250, 'Ok'), evt)
+
     # Implementation of base class abstract method
     def collect_incoming_data(self, data):
         limit = None
@@ -109,12 +122,12 @@ class SMTPSession(asynchat.async_chat):
 
     def command_terminated(self, line):
         if self.num_bytes > self.command_size_limit:
-            self.push('500 Error: line too long')
+            self.sendReply((500, 'Error: line too long'))
             self.num_bytes = 0
             return
         self.num_bytes = 0
         if not line:
-            self.push('500 Error: bad syntax')
+            self.sendReply((500, 'Error: bad syntax'))
             return
         i = line.find(' ')
         if i < 0:
@@ -125,18 +138,18 @@ class SMTPSession(asynchat.async_chat):
             arg = line[i + 1:].strip()
         method = getattr(self, 'smtp_' + command, None)
         if not method:
-            self.push('502 Error: command "%s" not implemented' % command)
+            self.sendReply((502, 'Error: command "%s" not implemented' % command))
             return
         method(arg)
         return
 
     def data_terminated(self, line):
         if self.smtp_state != self.SMTP_DATA or (self.data_state != self.DATA_HEADER and self.data_state != self.DATA_BODY):
-            self.push('451 Internal confusion')
+            self.sendReply((451, 'Internal confusion'))
             self.num_bytes = 0
             return
         if self.num_bytes > self.data_size_limit:
-            self.push('552 Error: Too much mail data')
+            self.sendReply((552, 'Error: Too much mail data'))
             self.num_bytes = 0
             return
 
@@ -173,9 +186,9 @@ class SMTPSession(asynchat.async_chat):
             if 250 != code:
                 self.sendReply((code, reply))
             else:
-                self.push('250 Ok')
+                self.sendOK()
         except Exception:
-            self.push('451 Error in processing')
+            self.sendReply((451, 'Error in processing'))
             raise
 
         self.transaction = None
@@ -214,21 +227,21 @@ class SMTPSession(asynchat.async_chat):
     def smtp_NOOP(self, arg):
         # protocol validation (rfc8321)
         if arg:
-            self.push('501 Syntax: NOOP')
+            self.sendReply((501, 'Syntax: NOOP'))
             return
         # end validation
 
-        self.push('250 Ok')
+        self.sendOK()
 
     def smtp_QUIT(self, arg):
         # protocol validation (rfc8321)
         if arg:
-            self.push('501 Syntax: QUIT')
+            self.sendReply((501, 'Syntax: QUIT'))
             return
         # end validation
 
         self.server.quit_if_needed()
-        self.push('221 Bye')
+        self.sendReply((221, 'Bye'))
         self.close_when_done()
 
     # factored
@@ -290,7 +303,7 @@ class SMTPSession(asynchat.async_chat):
         self.transaction = SMTPTransaction(address)
 
         print('sender:', self.transaction.mailfrom, file = debug.stream())
-        self.sendReply('250 Ok', event.SendSMTPMailResponse)
+        self.sendOK(event.SendSMTPMailResponse)
 
     def smtp_RCPT(self, arg):
         event.ReceivedSMTPRcpt.notify()
@@ -325,26 +338,26 @@ class SMTPSession(asynchat.async_chat):
 
         self.transaction.addRecipient(address)
         print('recips:', self.transaction.recipients, file = debug.stream())
-        self.sendReply('250 Ok', event.ReceivedSMTPRcpt)
+        self.sendOK(event.ReceivedSMTPRcpt)
 
     def smtp_RSET(self, arg):
         # protocol validation (rfc8321)
         if arg:
-            self.push('501 Syntax: RSET')
+            self.sendReply((501, 'Syntax: RSET'))
             return
         # end validation
 
         # Resets the sender, recipients, and data, but not the greeting
         self.reset()
-        self.push('250 Ok')
+        self.sendOK()
 
     def smtp_DATA(self, arg):
         # protocol validation (rfc8321)
         if not self.transaction.recipients:
-            self.push('503 Error: need RCPT command')
+            self.sendReply((503, 'Error: need RCPT command'))
             return
         if arg:
-            self.push('501 Syntax: DATA')
+            self.sendReply((501, 'Syntax: DATA'))
             return
         # TODO: have recipients?
         # target smtp validation
@@ -352,14 +365,14 @@ class SMTPSession(asynchat.async_chat):
             (code, reply) = self.server.data_cmd()
             if 354 != code:
                 #TODO: maybe react to different codes 
-                self.push('451 Error in processing')
+                self.sendReply((451, 'Error in processing'))
                 return
         except Exception:
-            self.push('451 Error in processing')
+            self.sendReply((451, 'Error in processing'))
             return
         # end validation
 
         self.smtp_state = self.SMTP_DATA
         self.data_state = self.DATA_HEADER
-        self.push('354 End data with <CR><LF>.<CR><LF>')
+        self.sendReply((354, 'End data with <CR><LF>.<CR><LF>'))
 
