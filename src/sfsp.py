@@ -152,7 +152,13 @@ def load_plugins():
         load_plugin('plugins.%s' % plugin)
     pass
 
+def require_version_3_2():
+    if 3 > sys.version_info.major or 2 > sys.version_info.minor:
+        print("%(program) requires at least python version >= 3.2" % globals())
+        sys.exit(1)
+
 if __name__ == '__main__':
+    require_version_3_2()
     options = parseargs()
     load_plugins()
     proxy = sfsp.Proxy(options, __version__)

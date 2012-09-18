@@ -5,6 +5,7 @@ Created on 31.08.2012
 '''
 
 from sys import stderr
+from sfsp import debug
 
 from smtplib import SMTP, _fix_eols, _quote_periods, bCRLF
 
@@ -23,10 +24,14 @@ class SMTPServer(SMTP):
         self.connected = False
 
     def connect_if_needed(self, host, port):
+        print("connect_if_needed()", file = debug.stream())
         if not self.connected:
+            print("  not connected, try connect", file = debug.stream())
             try:
                 reply = SMTP.connect(self, host, port)
+                print("  reply (%s, %s)" % reply, file = debug.stream())
                 if 220 == reply[0]:
+                    print("  connected = True", file = debug.stream())
                     self.connected = True
                 return reply
             except Exception:
@@ -35,7 +40,9 @@ class SMTPServer(SMTP):
             return (250, 'Already connected')
 
     def reset_if_needed(self):
+        print("reset_if_needed()", file = debug.stream())
         if self.connected:
+            print("  connected, try reset", file = debug.stream())
             SMTP.rset(self)
 
     def quit_if_needed(self):

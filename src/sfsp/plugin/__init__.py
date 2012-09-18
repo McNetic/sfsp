@@ -9,7 +9,6 @@ class PluginException(Exception):
 class Plugin():
     loadedModules = set()
     loadedPlugins = set()
-    knownHooks = frozenset()
 
     def __init__(self):
         pass
@@ -28,8 +27,8 @@ class Plugin():
             plugin = pluginClass
         for key, func in pluginClass.__dict__.items():
             if hasattr(func, 'eventListener'):
-                for evt in getattr(func, 'eventListener'):
-                    evt.register(plugin, key, pluginScope)
+                for (evt, priority) in getattr(func, 'eventListener'):
+                    evt.register(plugin, key, priority, pluginScope)
         cls.loadedPlugins.add(pluginClass)
 
 class plugin:

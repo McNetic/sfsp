@@ -5,6 +5,11 @@ Created on 31.08.2012
 '''
 
 import inspect
+from pprint import pprint
+import time
+import weakref
+
+from sfsp import debug
 import sfsp.session
 
 class Scope():
@@ -106,47 +111,85 @@ class Event():
             resultlist.setMainResult(defaultresult)
         return resultlist
 
-    def register(self, plugin, method, scope):
-        # todo: check valid event
+    def register(self, plugin, method, priority, scope):
         self.listeners.add(EventListener(plugin, method, scope))
 
 class SessionWrapper(object):
 
     def __init__(self, session):
-        self._session = session
+        self._session = weakref.proxy(session)
+
+    def getIID(self):
+        return self._session.getIID()
 
     def __getattr__(self, attr):
         return getattr(self._session, attr)
 
 class EventListener():
 
+    MIN_PRIORITY = 1
+    MAX_PRIORITY = 9
+    DEFAULT_PRIORITY = 5
+
+    CLEANUP_INTERVAL = 10
+
     def __init__(self, module, method, scope):
         self.module = module
         self.method = method
         self.scope = scope
+        self._lastCleanup = time.time()
+        if Scope.SESSION == scope:
+            self._sessionModules = {}
 
-    def getSessionObject(self):
+    def _cleanupSessionModules(self):
+        timeClean = time.time() - EventListener.CLEANUP_INTERVAL
+        if self._lastCleanup < timeClean:
+            #print("_cleanupSessionModules()", file = debug.stream())
+            #print("before: ", file = debug.stream())
+            #pprint(self._sessionModules)
+            #self._sessionModules = dict(filter(lambda (session, (module, createTime)): createTime < timeClean, self._sessionModules.items()))
+            self._sessionModules = dict(filter(lambda x: None != x[1] and sfsp.session.SMTPSession.sessionActive(x[0]), self._sessionModules.items()))
+            #print("after: ", file = debug.stream())
+            #pprint(self._sessionModules)
+            self._lastCleanup = time.time()
+
+    def _getSessionObject(self):
         for frame in inspect.stack():
             if 'self' in frame[0].f_locals and sfsp.session.SMTPSession == frame[0].f_locals['self'].__class__:
                 return SessionWrapper(frame[0].f_locals['self'])
 
+    def _getSessionModule(self, session):
+        if session.getIID() in self._sessionModules:
+            #print("_getSessionModule() for (%s, %s): return from cache for %s" % (self.module, self.method, session.getIID()), file = debug.stream())
+            module = self._sessionModules[session.getIID()]
+        else:
+            #print("_getSessionModule() for (%s, %s): create new for %s" % (self.module, self.method, session.getIID()), file = debug.stream())
+            module = self.module()
+            self._sessionModules[session.getIID()] = module
+        self._cleanupSessionModules()
+        return module
+
     def __call__(self, evt, *args):
+        session = self._getSessionObject()
         if Scope.SESSION == self.scope:
-            module = EventListener.getSessionModule()
+            module = self._getSessionModule(session)
         else:
             module = self.module
-        return getattr(module, self.method)(evt, self.getSessionObject(), * args)
+        return getattr(module, self.method)(evt, session, * args)
 
 class listener:
     '''decorator for event listening methods'''
 
-    def __init__(self, event):
+    def __init__(self, event, priority = EventListener.DEFAULT_PRIORITY):
+        if EventListener.MIN_PRIORITY > priority or EventListener.MAX_PRIORITY < priority:
+            raise ValueError('EventListener priority must be within %d and %d' % (EventListener.MIN_PRIORITY, EventListener.MAX_PRIORITY))
+        self.priority = priority
         self.event = event
 
     def __call__(self, func):
         if not hasattr(func, 'eventListener'):
             func.eventListener = set()
-        func.eventListener.add(self.event)
+        func.eventListener.add((self.event, self.priority))
 
         return func
 

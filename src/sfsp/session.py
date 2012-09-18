@@ -2,6 +2,7 @@ import asynchat
 import errno
 import smtplib
 import socket
+import weakref
 
 from sfsp import debug
 from sfsp.client import *
@@ -28,8 +29,10 @@ class ErrorState:
 
 
 class SMTPSession(asynchat.async_chat):
-    SMTP_COMMAND = 0
-    SMTP_DATA = 1
+    SMTP_INIT = 0
+    SMTP_COMMAND = 1
+    SMTP_DATA = 2
+    SMTP_DISCONNECTED = 3
 
     DATA_NONE = 0
     DATA_HEADER = 1
@@ -38,13 +41,35 @@ class SMTPSession(asynchat.async_chat):
     data_size_limit = 33554432
     command_size_limit = 512
 
+    instanceNumber = 0
+    instances = weakref.WeakValueDictionary()
+
+    @classmethod
+    def init_instance(cls, instance):
+        cls.instances[instance.getIID()] = instance
+
+    @classmethod
+    def getSession(cls, iid):
+        if cls.instances.__contains__(iid):
+            return cls.instances[iid]
+        else:
+            return None
+
+    @classmethod
+    def sessionActive(cls, iid):
+        return cls.instances.__contains__(iid) and cls.SMTP_DISCONNECTED > cls.instances[iid].getSMTPState()
+
     def __init__(self, sfsp, sock, address):
         super().__init__(sock)
+        self._iid = SMTPSession.instanceNumber
+        SMTPSession.instanceNumber += 1
+        self.init_instance(self)
+
         self.sfsp = sfsp
         self.sock = sock
         self.client = SMTPClient(address)
         self.received_lines = []
-        self.smtp_state = self.SMTP_COMMAND
+        self.smtp_state = self.SMTP_INIT
         self.data_state = self.DATA_NONE
         self.error_state = ErrorState.OK
         self.seen_greeting = False
@@ -53,6 +78,12 @@ class SMTPSession(asynchat.async_chat):
         self.num_bytes = 0
         self.set_terminator(BCRLF)
         self.last_line = None
+
+    def getIID(self):
+        return self._iid
+
+    def getSMTPState(self):
+        return self.smtp_state
 
     def initSMTP(self):
         event.StartSession.notify()
@@ -79,6 +110,7 @@ class SMTPSession(asynchat.async_chat):
             pass
 
         self.sendReply((220, '%s %s' % (self.fqdn, self.sfsp.version)), event.SendSMTPBanner)
+        self.smtp_state = self.SMTP_COMMAND
 
     # Overrides base class for convenience
     def push(self, msg):
@@ -110,10 +142,10 @@ class SMTPSession(asynchat.async_chat):
     # Implementation of base class abstract method
     def collect_incoming_data(self, data):
         limit = None
-        if self.smtp_state == self.SMTP_COMMAND:
-            limit = self.command_size_limit
-        elif self.smtp_state == self.SMTP_DATA:
+        if self.smtp_state == self.SMTP_DATA:
             limit = self.data_size_limit
+        else:
+            limit = self.command_size_limit
         if limit and self.num_bytes > limit:
             return
         elif limit:
@@ -242,6 +274,7 @@ class SMTPSession(asynchat.async_chat):
 
         self.server.quit_if_needed()
         self.sendReply((221, 'Bye'))
+        self.smtp_state = self.SMTP_DISCONNECTED
         self.close_when_done()
 
     # factored
@@ -277,7 +310,7 @@ class SMTPSession(asynchat.async_chat):
         # target smtp validation
         try:
             (code, reply) = self.server.connect_if_needed(self.sfsp.options.remoteaddress, self.sfsp.options.remoteport)
-            if 220 != code:
+            if 220 != code and 250 != code:
                 # TODO: maybe only forward 421?
                 self.sendReply((code, reply), event.SendSMTPMailResponse)
                 return
@@ -287,7 +320,7 @@ class SMTPSession(asynchat.async_chat):
         try:
             self.server.ehlo_or_helo_if_needed()
         except smtplib.SMTPHeloError as excpt:
-            self.sendReply('451 Error in processing (' + excpt.resp + ')', event.SendSMTPMailResponse)
+            self.sendReply('451 Error in processing (%s)' % excpt.resp, event.SendSMTPMailResponse)
             return
         try:
             (code, reply) = self.server.mail(address)
