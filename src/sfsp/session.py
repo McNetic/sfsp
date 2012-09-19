@@ -263,6 +263,7 @@ class SMTPSession(asynchat.async_chat):
             return
         # end validation
 
+        self.server.noop_if_connected()
         self.sendOK()
 
     def smtp_QUIT(self, arg):

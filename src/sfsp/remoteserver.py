@@ -20,7 +20,7 @@ class SMTPServer(SMTP):
         '''
         Constructor
         '''
-        SMTP.__init__(self)
+        super().__init__()
         self.connected = False
 
     def connect_if_needed(self, host, port):
@@ -28,7 +28,7 @@ class SMTPServer(SMTP):
         if not self.connected:
             print("  not connected, try connect", file = debug.stream())
             try:
-                reply = SMTP.connect(self, host, port)
+                reply = self.connect(host, port)
                 print("  reply (%s, %s)" % reply, file = debug.stream())
                 if 220 == reply[0]:
                     print("  connected = True", file = debug.stream())
@@ -39,18 +39,22 @@ class SMTPServer(SMTP):
         else:
             return (250, 'Already connected')
 
+    def noop_if_connected(self):
+        if self.connected:
+            self.noop()
+
     def reset_if_needed(self):
         print("reset_if_needed()", file = debug.stream())
         if self.connected:
             print("  connected, try reset", file = debug.stream())
-            SMTP.rset(self)
+            self.rset()
 
     def quit_if_needed(self):
         if self.connected:
             self.quit()
 
     def ehlo_or_helo_if_needed(self):
-        SMTP.ehlo_or_helo_if_needed(self)
+        super().ehlo_or_helo_if_needed()
 
 
     def data_cmd(self):

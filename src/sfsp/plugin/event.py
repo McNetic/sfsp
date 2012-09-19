@@ -10,6 +10,7 @@ import time
 import weakref
 
 from sfsp import debug
+from sfsp.util.bucketset import BucketSet
 import sfsp.session
 
 class Scope():
@@ -91,7 +92,7 @@ class Event():
 
     def __init__(self):
         self.eventID = Event.getNextEventID()
-        self.listeners = set()
+        self.listeners = BucketSet()
 
     def notify(self, *args):
         for listener in self.listeners:
@@ -112,7 +113,7 @@ class Event():
         return resultlist
 
     def register(self, plugin, method, priority, scope):
-        self.listeners.add(EventListener(plugin, method, scope))
+        self.listeners.add(EventListener(plugin, method, scope), priority)
 
 class SessionWrapper(object):
 
