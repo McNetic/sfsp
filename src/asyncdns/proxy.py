@@ -57,7 +57,7 @@ class SocksProtocol(object):
         'address type not supported',
     ]
 
-    def __init__(self, sock, username='', passwd='', version=VER_SOCKS_5):
+    def __init__(self, sock, username = '', passwd = '', version = VER_SOCKS_5):
         if version not in [self.VER_SOCKS_5]:
             raise InvalidSocksVersion(version)
 
@@ -70,11 +70,11 @@ class SocksProtocol(object):
         buf = ""
 
         while len(buf) < bytes:
-            buf += self.sock.recv(bytes-len(buf))
+            buf += self.sock.recv(bytes - len(buf))
 
         return buf
 
-    def make_connect(self, methods=[METHOD_NO_AUTH, METHOD_SIMPLE]):
+    def make_connect(self, methods = [METHOD_NO_AUTH, METHOD_SIMPLE]):
         if methods in [[], None]:
             methods = [self.METHOD_NO_AUTH]
 
@@ -134,7 +134,7 @@ class SocksProtocol(object):
 
         return self.parse_simple_auth()
 
-    def make_request(self, cmd, host='0.0.0.0', port=0):
+    def make_request(self, cmd, host = '0.0.0.0', port = 0):
         buf = struct.pack("3B", self.version, cmd, 0)
 
         try:
@@ -170,7 +170,7 @@ class SocksProtocol(object):
 
         return host, port
 
-    def associate(self, host='0.0.0.0', port=0):
+    def associate(self, host = '0.0.0.0', port = 0):
         self.logger.info("sending a UDP associate request to proxy %s:%d", *self.sock.getpeername())
 
         self.sock.sendall(self.make_request(self.CMD_UDP_ASSOCIATE, host, port))
@@ -200,19 +200,19 @@ class SocksProtocol(object):
         pos = 4
 
         if addr_type == self.ADDR_TYPE_IPV4:
-            host = socket.inet_ntoa(buf[pos:pos+4])
+            host = socket.inet_ntoa(buf[pos:pos + 4])
             pos += 4
 
         elif addr_type == self.ADDR_TYPE_DOMAIN:
             len = ord(buf[pos])
             pos += 1
 
-            host = buf[pos:pos+len]
+            host = buf[pos:pos + len]
             pos += len
         else:
             raise SocksProtocolError("unsupport address type: %d" % addr_type)
 
-        port = struct.unpack(">H", buf[pos:pos+2])[0]
+        port = struct.unpack(">H", buf[pos:pos + 2])[0]
 
         pos += 2
 
@@ -233,8 +233,8 @@ class SocksProxy(object):
     """
     logger = logging.getLogger("asyncdns.proxy")
 
-    def __init__(self, host, port, username='', passwd='',
-                 version=SocksProtocol.VER_SOCKS_5, timeout=5):
+    def __init__(self, host, port, username = '', passwd = '',
+                 version = SocksProtocol.VER_SOCKS_5, timeout = 5):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(timeout)
 
@@ -276,7 +276,7 @@ class SocksProxy(object):
         return self.proto.connect()
 
     def wrapped_sendto(self, proxy, sendto):
-        def wrapped(data, flags, addr=None):
+        def wrapped(data, flags, addr = None):
             if addr is None:
                 addr = flags
                 flags = 0
@@ -292,7 +292,7 @@ class SocksProxy(object):
         return wrapped
 
     def wrapped_recvfrom(self, proxy, recvfrom):
-        def wrapped(bufsize, flags=0):
+        def wrapped(bufsize, flags = 0):
             data, addr = recvfrom(bufsize, flags)
 
             host, port, data = self.proto.parse_packet(data)
@@ -311,9 +311,9 @@ class SocksProxy(object):
         sock.sendto = self.wrapped_sendto(addr, sock.sendto)
         sock.recvfrom = self.wrapped_recvfrom(addr, sock.recvfrom)
 
-if __name__=='__main__':
-    logging.basicConfig(level=logging.DEBUG if "-v" in sys.argv else logging.WARN,
-                        format='%(asctime)s %(levelname)s %(message)s')
+if __name__ == '__main__':
+    logging.basicConfig(level = logging.DEBUG if "-v" in sys.argv else logging.WARN,
+                        format = '%(asctime)s %(levelname)s %(message)s')
 
     args = [arg for arg in sys.argv[1:] if arg[0] != '-']
     domain = args.pop(0)
@@ -336,12 +336,12 @@ if __name__=='__main__':
 
         sent = sock.sendto(request.to_wire(), ("8.8.8.8", 53))
 
-        print "INFO: sent %d bytes through proxy" % sent
+        print("INFO: sent %d bytes through proxy" % sent)
 
         packet, addr = sock.recvfrom(1024)
 
-        print "INFO: received %d bytes packet from %s" % (len(packet), addr)
+        print("INFO: received %d bytes packet from %s" % (len(packet), addr))
 
         response = dns.message.from_wire(packet)
 
-        print "INFO: response=", response
+        print("INFO: response=", response)

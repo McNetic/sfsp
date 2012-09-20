@@ -8,7 +8,7 @@ import traceback
 import dns.rdatatype
 import dns.rdataclass
 
-from pipeline import Pipeline
+from .pipeline import Pipeline
 
 def normalize(s):
     for encoding in ['utf-8', 'latin1', 'cp1252', 'gbk']:
@@ -22,7 +22,7 @@ def normalize(s):
 class Resolver(Pipeline):
     logger = logging.getLogger("asyncdns.resolver")
 
-    def __init__(self, wheel=None, proxy=None, start=True):
+    def __init__(self, wheel = None, proxy = None, start = True):
         Pipeline.__init__(self, wheel, proxy, start)
 
     @staticmethod
@@ -55,13 +55,13 @@ class Resolver(Pipeline):
     def _execute_callback(self, callback, nameserver, qname, response):
         try:
             callback(nameserver, qname, response)
-        except Exception, e:
+        except Exception as e:
             self.logger.warn("fail to execute callback for domain %s: %s", qname, e)
             self.logger.debug("exc: %s", traceback.format_exc())
             self.logger.debug("res: %s", response)
 
-    def lookup(self, qname, rdtype, rdclass, expired=30,
-               callback=None, nameservers=None, port=53):
+    def lookup(self, qname, rdtype, rdclass, expired = 30,
+               callback = None, nameservers = None, port = 53):
         results = {}
         finished = None if callback else threading.Event()
 
@@ -125,14 +125,14 @@ class Resolver(Pipeline):
     def lookupAllRecords(self, qname, *args, **kwds):
           return self.lookup(qname, dns.rdatatype.ANY, dns.rdataclass.IN, *args, **kwds)
 
-if __name__=='__main__':
-    from timewheel import TimeWheel
+if __name__ == '__main__':
+    from .timewheel import TimeWheel
 
-    logging.basicConfig(level=logging.DEBUG if "-v" in sys.argv else logging.WARN,
-                        format='%(asctime)s %(levelname)s %(message)s')
+    logging.basicConfig(level = logging.DEBUG if "-v" in sys.argv else logging.WARN,
+                        format = '%(asctime)s %(levelname)s %(message)s')
 
     resolver = Resolver()
 
     for domain in sys.argv[1:]:
         if domain[0] != '-':
-            print domain, resolver.lookupAddress(domain)
+            print(domain, resolver.lookupAddress(domain))

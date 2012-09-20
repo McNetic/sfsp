@@ -10,7 +10,7 @@ import threading
 
 import traceback
 
-import Queue
+import queue
 
 import dns.name
 import dns.rdatatype
@@ -19,14 +19,14 @@ import dns.message
 import dns.resolver
 import dns.exception
 
-from timewheel import TimeWheel
+from .timewheel import TimeWheel
 
 class Pipeline(asyncore.dispatcher, threading.Thread):
     logger = logging.getLogger("asyncdns.pipeline")
 
-    def __init__(self, wheel=None, proxy=None, start=True):
+    def __init__(self, wheel = None, proxy = None, start = True):
         asyncore.dispatcher.__init__(self)
-        threading.Thread.__init__(self, name="asyncdns.pipeline")
+        threading.Thread.__init__(self, name = "asyncdns.pipeline")
 
         self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -34,7 +34,7 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
             proxy.wrap(self.sock)
 
         self.terminated = threading.Event()
-        self.task_queue = Queue.Queue()
+        self.task_queue = queue.Queue()
 
         self.pending_tasks_lock = threading.Lock()
         self.pending_tasks = {}
@@ -87,20 +87,24 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
             with self.pending_tasks_lock:
                 tasks = self.pending_tasks[nameserver]
 
+                to_delete = []
                 for request in tasks.keys():
                     if request.is_response(response):
                         callback, timer = tasks[request]
 
-                        del tasks[request]
+                        to_delete.append(request)
 
                         timer.cancel()
 
                         try:
                             callback(nameserver, response)
-                        except Exception, e:
+                        except Exception as e:
                             self.logger.warn("fail to execute callback: %s", e)
                             self.logger.debug("exc: %s", traceback.format_exc())
                             self.logger.debug("res: %s", response)
+
+                for request in to_delete:
+                    del tasks[request]
 
     def writable(self):
         return not self.task_queue.empty()
@@ -120,7 +124,7 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
 
                         try:
                             callback(nameserver, socket.timeout("dns query to %s was timeout after %d seconds" % (nameserver[0], expired)))
-                        except Exception, e:
+                        except Exception as e:
                             self.logger.warn("fail to execute callback: %s", e)
                             self.logger.debug("exc: %s", traceback.format_exc())
                             self.logger.debug("res: %s", request)
@@ -128,13 +132,14 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
                     timer = self.wheel.create(ontimeout, expired)
 
                     tasks[request] = (callback, timer)
-        except Exception, e:
+        except Exception as e:
             self.logger.warn("fail to send query, %s", e)
+            traceback.print_exc()
 
     def sendto(self, data, address):
         try:
             return self.socket.sendto(data, 0, address)
-        except socket.error, why:
+        except socket.error as why:
             if why[0] == EWOULDBLOCK:
                 return 0
             else:
@@ -147,7 +152,7 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
     def recvfrom(self, bufize):
         try:
             return self.socket.recvfrom(65535)
-        except socket.error, why:
+        except socket.error as why:
             if why[0] in [EWOULDBLOCK, EAGAIN]:
                 return None, None
             else:
@@ -155,9 +160,9 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
 
                 raise
 
-    def query(self, qname, rdtype=dns.rdatatype.A, rdclass=dns.rdataclass.IN,
-              expired=30, callback=None, nameservers=None, port=53):
-        if isinstance(qname, (str, unicode)):
+    def query(self, qname, rdtype = dns.rdatatype.A, rdclass = dns.rdataclass.IN,
+              expired = 30, callback = None, nameservers = None, port = 53):
+        if isinstance(qname, str):
             qname = dns.name.from_text(qname, None)
         if isinstance(rdtype, str):
             rdtype = dns.rdatatype.from_text(rdtype)
@@ -204,21 +209,21 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
 
     def run(self):
         try:
-            asyncore.loop(timeout=1, use_poll=True)
-        except Exception, e:
+            asyncore.loop(timeout = 1, use_poll = True)
+        except Exception as e:
             self.logger.warn("fail to run asyncdns pipeline, %s", e)
 
-if __name__=='__main__':
-    logging.basicConfig(level=logging.DEBUG if "-v" in sys.argv else logging.WARN,
-                        format='%(asctime)s %(levelname)s %(message)s')
+if __name__ == '__main__':
+    logging.basicConfig(level = logging.DEBUG if "-v" in sys.argv else logging.WARN,
+                        format = '%(asctime)s %(levelname)s %(message)s')
 
     pipeline = Pipeline()
 
     def dump(nameserver, response):
-        print nameserver, response
+        print(nameserver, response)
 
     for domain in sys.argv[1:]:
         if domain[0] != '-':
-            pipeline.query(domain, callback=dump)
+            pipeline.query(domain, callback = dump)
 
     pipeline.join()

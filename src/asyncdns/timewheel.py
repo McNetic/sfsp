@@ -6,12 +6,9 @@ import time
 import datetime
 import logging
 import threading
-import Queue
+import queue
 
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
+from io import StringIO
 
 # Hashed and Hierarchical Timing Wheels: Efficient Data Structures for Implementing a Timer Facility (1996)
 #
@@ -20,7 +17,7 @@ except ImportError:
 class Timer(object):
     logger = logging.getLogger("asyncdns.timer")
 
-    def __init__(self, callback, expired, name=None):
+    def __init__(self, callback, expired, name = None):
         self.slot = None
         self.callback = callback
         self.expired = expired
@@ -38,7 +35,7 @@ class Timer(object):
         if self.callback:
             try:
                 self.callback()
-            except Exception, e:
+            except Exception as e:
                 self.logger.warn("fail to execute timer callback, %s", e)
 
     @staticmethod
@@ -109,7 +106,7 @@ class TimeWheel(threading.Thread):
 
     class Dispatcher(threading.Thread):
         def __init__(self, terminated, task_queue):
-            threading.Thread.__init__(self, name="asyncdns.dispatcher")
+            threading.Thread.__init__(self, name = "asyncdns.dispatcher")
 
             self.terminated = terminated
             self.task_queue = task_queue
@@ -123,12 +120,12 @@ class TimeWheel(threading.Thread):
                 timer.call()
                 self.task_queue.task_done()
 
-    def __init__(self, task_pool_size=0, slots=360, start=True):
-        threading.Thread.__init__(self, name="asyncdns.timewheel")
+    def __init__(self, task_pool_size = 0, slots = 360, start = True):
+        threading.Thread.__init__(self, name = "asyncdns.timewheel")
 
         self.slots = [TimeSlot() for i in range(slots)]
         self.terminated = threading.Event()
-        self.task_queue = Queue.Queue() if task_pool_size else None
+        self.task_queue = queue.Queue() if task_pool_size else None
         self.task_pool_size = task_pool_size
 
         self.setDaemon(True)
@@ -146,7 +143,7 @@ class TimeWheel(threading.Thread):
 
         for slot in self.slots:
             if len(slot) > 0:
-                print >>out, "Slot#%d %d: %s" % (count, len(slot), slot.dump())
+                print >> out, "Slot#%d %d: %s" % (count, len(slot), slot.dump())
 
             count += 1
 
@@ -154,14 +151,14 @@ class TimeWheel(threading.Thread):
 
     def create(self, callback, expired):
         expired = Timer.normalize(expired)
-        timer = Timer(callback, expired/len(self.slots))
+        timer = Timer(callback, expired / len(self.slots))
 
         with self.slots[int(time.time() + expired) % len(self.slots)] as slot:
             slot.insert(timer)
 
         return timer
 
-    def check(self, ts=None):
+    def check(self, ts = None):
         with self.slots[int(ts or time.time()) % len(self.slots)] as slot:
             return slot.check()
 
