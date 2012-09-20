@@ -35,7 +35,7 @@ import dns.rdatatype
 import dns.reversename
 
 if sys.platform == 'win32':
-    import _winreg
+    import winreg
 
 class NXDOMAIN(dns.exception.DNSException):
     """The query name does not exist."""
@@ -100,7 +100,7 @@ class Answer(object):
     @type canonical_name: dns.name.Name object
     """
     def __init__(self, qname, rdtype, rdclass, response,
-                 raise_on_no_answer=True):
+                 raise_on_no_answer = True):
         self.qname = qname
         self.rdtype = rdtype
         self.rdclass = rdclass
@@ -200,7 +200,7 @@ class Cache(object):
     @type next_cleaning: float
     """
 
-    def __init__(self, cleaning_interval=300.0):
+    def __init__(self, cleaning_interval = 300.0):
         """Initialize a DNS cache.
 
         @param cleaning_interval: the number of seconds between periodic
@@ -253,7 +253,7 @@ class Cache(object):
         self.maybe_clean()
         self.data[key] = value
 
-    def flush(self, key=None):
+    def flush(self, key = None):
         """Flush the cache.
 
         If I{key} is specified, only that item is flushed.  Otherwise
@@ -312,7 +312,7 @@ class LRUCache(object):
     @type max_size: int
     """
 
-    def __init__(self, max_size=100000):
+    def __init__(self, max_size = 100000):
         """Initialize a DNS cache.
 
         @param max_size: The maximum number of nodes to cache; the default is 100000.  Must be > 1.
@@ -367,7 +367,7 @@ class LRUCache(object):
         node.link_after(self.sentinel)
         self.data[key] = node
 
-    def flush(self, key=None):
+    def flush(self, key = None):
         """Flush the cache.
 
         If I{key} is specified, only that item is flushed.  Otherwise
@@ -427,7 +427,7 @@ class Resolver(object):
     @ivar cache: The cache to use.  The default is None.
     @type cache: dns.resolver.Cache object
     """
-    def __init__(self, filename='/etc/resolv.conf', configure=True):
+    def __init__(self, filename = '/etc/resolv.conf', configure = True):
         """Initialize a resolver instance.
 
         @param filename: The filename of a configuration file in
@@ -539,32 +539,32 @@ class Resolver(object):
     def _config_win32_fromkey(self, key):
         """Extract DNS info from a registry key."""
         try:
-            servers, rtype = _winreg.QueryValueEx(key, 'NameServer')
+            servers, rtype = winreg.QueryValueEx(key, 'NameServer')
         except WindowsError:
             servers = None
         if servers:
             self._config_win32_nameservers(servers)
             try:
-                dom, rtype = _winreg.QueryValueEx(key, 'Domain')
+                dom, rtype = winreg.QueryValueEx(key, 'Domain')
                 if dom:
                     self._config_win32_domain(dom)
             except WindowsError:
                 pass
         else:
             try:
-                servers, rtype = _winreg.QueryValueEx(key, 'DhcpNameServer')
+                servers, rtype = winreg.QueryValueEx(key, 'DhcpNameServer')
             except WindowsError:
                 servers = None
             if servers:
                 self._config_win32_nameservers(servers)
                 try:
-                    dom, rtype = _winreg.QueryValueEx(key, 'DhcpDomain')
+                    dom, rtype = winreg.QueryValueEx(key, 'DhcpDomain')
                     if dom:
                         self._config_win32_domain(dom)
                 except WindowsError:
                     pass
         try:
-            search, rtype = _winreg.QueryValueEx(key, 'SearchList')
+            search, rtype = winreg.QueryValueEx(key, 'SearchList')
         except WindowsError:
             search = None
         if search:
@@ -572,18 +572,18 @@ class Resolver(object):
 
     def read_registry(self):
         """Extract resolver configuration from the Windows registry."""
-        lm = _winreg.ConnectRegistry(None, _winreg.HKEY_LOCAL_MACHINE)
+        lm = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
         want_scan = False
         try:
             try:
                 # XP, 2000
-                tcp_params = _winreg.OpenKey(lm,
+                tcp_params = winreg.OpenKey(lm,
                                              r'SYSTEM\CurrentControlSet'
                                              r'\Services\Tcpip\Parameters')
                 want_scan = True
             except EnvironmentError:
                 # ME
-                tcp_params = _winreg.OpenKey(lm,
+                tcp_params = winreg.OpenKey(lm,
                                              r'SYSTEM\CurrentControlSet'
                                              r'\Services\VxD\MSTCP')
             try:
@@ -591,7 +591,7 @@ class Resolver(object):
             finally:
                 tcp_params.Close()
             if want_scan:
-                interfaces = _winreg.OpenKey(lm,
+                interfaces = winreg.OpenKey(lm,
                                              r'SYSTEM\CurrentControlSet'
                                              r'\Services\Tcpip\Parameters'
                                              r'\Interfaces')
@@ -599,9 +599,9 @@ class Resolver(object):
                     i = 0
                     while True:
                         try:
-                            guid = _winreg.EnumKey(interfaces, i)
+                            guid = winreg.EnumKey(interfaces, i)
                             i += 1
-                            key = _winreg.OpenKey(interfaces, guid)
+                            key = winreg.OpenKey(interfaces, guid)
                             if not self._win32_is_nic_enabled(lm, guid, key):
                                 continue
                             try:
@@ -624,7 +624,7 @@ class Resolver(object):
          try:
              # This hard-coded location seems to be consistent, at least
              # from Windows 2000 through Vista.
-             connection_key = _winreg.OpenKey(
+             connection_key = winreg.OpenKey(
                  lm,
                  r'SYSTEM\CurrentControlSet\Control\Network'
                  r'\{4D36E972-E325-11CE-BFC1-08002BE10318}'
@@ -632,21 +632,21 @@ class Resolver(object):
 
              try:
                  # The PnpInstanceID points to a key inside Enum
-                 (pnp_id, ttype) = _winreg.QueryValueEx(
+                 (pnp_id, ttype) = winreg.QueryValueEx(
                      connection_key, 'PnpInstanceID')
 
-                 if ttype != _winreg.REG_SZ:
+                 if ttype != winreg.REG_SZ:
                      raise ValueError
 
-                 device_key = _winreg.OpenKey(
+                 device_key = winreg.OpenKey(
                      lm, r'SYSTEM\CurrentControlSet\Enum\%s' % pnp_id)
 
                  try:
                      # Get ConfigFlags for this device
-                     (flags, ttype) = _winreg.QueryValueEx(
+                     (flags, ttype) = winreg.QueryValueEx(
                          device_key, 'ConfigFlags')
 
-                     if ttype != _winreg.REG_DWORD:
+                     if ttype != winreg.REG_DWORD:
                          raise ValueError
 
                      # Based on experimentation, bit 0x1 indicates that the
@@ -664,7 +664,7 @@ class Resolver(object):
              # the old method since we don't know if the code above works
              # on Windows 95/98/ME.
              try:
-                 (nte, ttype) = _winreg.QueryValueEx(interface_key,
+                 (nte, ttype) = winreg.QueryValueEx(interface_key,
                                                      'NTEContextList')
                  return nte is not None
              except WindowsError:
@@ -686,8 +686,8 @@ class Resolver(object):
             raise Timeout
         return min(self.lifetime - duration, self.timeout)
 
-    def query(self, qname, rdtype=dns.rdatatype.A, rdclass=dns.rdataclass.IN,
-              tcp=False, source=None, raise_on_no_answer=True, source_port=0):
+    def query(self, qname, rdtype = dns.rdatatype.A, rdclass = dns.rdataclass.IN,
+              tcp = False, source = None, raise_on_no_answer = True, source_port = 0):
         """Query nameservers to find the answer to the question.
 
         The I{qname}, I{rdtype}, and I{rdclass} parameters may be objects
@@ -753,7 +753,7 @@ class Resolver(object):
             request = dns.message.make_query(qname, rdtype, rdclass)
             if not self.keyname is None:
                 request.use_tsig(self.keyring, self.keyname,
-                                 algorithm=self.keyalgorithm)
+                                 algorithm = self.keyalgorithm)
             request.use_edns(self.edns, self.ednsflags, self.payload)
             response = None
             #
@@ -770,20 +770,20 @@ class Resolver(object):
                         if tcp:
                             response = dns.query.tcp(request, nameserver,
                                                      timeout, self.port,
-                                                     source=source,
-                                                     source_port=source_port)
+                                                     source = source,
+                                                     source_port = source_port)
                         else:
                             response = dns.query.udp(request, nameserver,
                                                      timeout, self.port,
-                                                     source=source,
-                                                     source_port=source_port)
+                                                     source = source,
+                                                     source_port = source_port)
                             if response.flags & dns.flags.TC:
                                 # Response truncated; retry with TCP.
                                 timeout = self._compute_timeout(start)
                                 response = dns.query.tcp(request, nameserver,
                                                        timeout, self.port,
-                                                       source=source,
-                                                       source_port=source_port)
+                                                       source = source,
+                                                       source_port = source_port)
 
                     except (socket.error, dns.exception.Timeout):
                         #
@@ -855,8 +855,8 @@ class Resolver(object):
             self.cache.put((qname, rdtype, rdclass), answer)
         return answer
 
-    def use_tsig(self, keyring, keyname=None,
-                 algorithm=dns.tsig.default_algorithm):
+    def use_tsig(self, keyring, keyname = None,
+                 algorithm = dns.tsig.default_algorithm):
         """Add a TSIG signature to the query.
 
         @param keyring: The TSIG keyring to use; defaults to None.
@@ -902,9 +902,9 @@ def get_default_resolver():
         default_resolver = Resolver()
     return default_resolver
 
-def query(qname, rdtype=dns.rdatatype.A, rdclass=dns.rdataclass.IN,
-          tcp=False, source=None, raise_on_no_answer=True,
-          source_port=0):
+def query(qname, rdtype = dns.rdatatype.A, rdclass = dns.rdataclass.IN,
+          tcp = False, source = None, raise_on_no_answer = True,
+          source_port = 0):
     """Query nameservers to find the answer to the question.
 
     This is a convenience function that uses the default resolver
@@ -914,7 +914,7 @@ def query(qname, rdtype=dns.rdatatype.A, rdclass=dns.rdataclass.IN,
     return get_default_resolver().query(qname, rdtype, rdclass, tcp, source,
                                         raise_on_no_answer, source_port)
 
-def zone_for_name(name, rdclass=dns.rdataclass.IN, tcp=False, resolver=None):
+def zone_for_name(name, rdclass = dns.rdataclass.IN, tcp = False, resolver = None):
     """Find the name of the zone which contains the specified name.
 
     @param name: the query name
@@ -964,9 +964,9 @@ _original_gethostbyname = socket.gethostbyname
 _original_gethostbyname_ex = socket.gethostbyname_ex
 _original_gethostbyaddr = socket.gethostbyaddr
 
-def _getaddrinfo(host=None, service=None, family=socket.AF_UNSPEC, socktype=0,
-                 proto=0, flags=0):
-    if flags & (socket.AI_ADDRCONFIG|socket.AI_V4MAPPED) != 0:
+def _getaddrinfo(host = None, service = None, family = socket.AF_UNSPEC, socktype = 0,
+                 proto = 0, flags = 0):
+    if flags & (socket.AI_ADDRCONFIG | socket.AI_V4MAPPED) != 0:
         raise NotImplementedError
     if host is None and service is None:
         raise socket.gaierror(socket.EAI_NONAME)
@@ -1004,7 +1004,7 @@ def _getaddrinfo(host=None, service=None, family=socket.AF_UNSPEC, socktype=0,
                     qname = None
                     if family == socket.AF_INET6 or family == socket.AF_UNSPEC:
                         v6 = _resolver.query(host, dns.rdatatype.AAAA,
-                                             raise_on_no_answer=False)
+                                             raise_on_no_answer = False)
                         # Note that setting host ensures we query the same name
                         # for A as we did for AAAA.
                         host = v6.qname
@@ -1014,7 +1014,7 @@ def _getaddrinfo(host=None, service=None, family=socket.AF_UNSPEC, socktype=0,
                                 v6addrs.append(rdata.address)
                     if family == socket.AF_INET or family == socket.AF_UNSPEC:
                         v4 = _resolver.query(host, dns.rdatatype.A,
-                                             raise_on_no_answer=False)
+                                             raise_on_no_answer = False)
                         host = v4.qname
                         canonical_name = v4.canonical_name.to_text(True)
                         if v4.rrset is not None:
@@ -1064,7 +1064,7 @@ def _getaddrinfo(host=None, service=None, family=socket.AF_UNSPEC, socktype=0,
         raise socket.gaierror(socket.EAI_NONAME)
     return tuples
 
-def _getnameinfo(sockaddr, flags=0):
+def _getnameinfo(sockaddr, flags = 0):
     host = sockaddr[0]
     port = sockaddr[1]
     if len(sockaddr) == 4:
@@ -1103,7 +1103,7 @@ def _getnameinfo(sockaddr, flags=0):
         service = socket.getservbyport(port, pname)
     return (hostname, service)
 
-def _getfqdn(name=None):
+def _getfqdn(name = None):
     if name is None:
         name = socket.gethostname()
     return _getnameinfo(_getaddrinfo(name, 80)[0][4])[0]
@@ -1141,7 +1141,7 @@ def _gethostbyaddr(ip):
     # XXX we just ignore aliases
     return (canonical, aliases, addresses)
 
-def override_system_resolver(resolver=None):
+def override_system_resolver(resolver = None):
     """Override the system resolver routines in the socket module with
     versions which use dnspython's resolver.
 
