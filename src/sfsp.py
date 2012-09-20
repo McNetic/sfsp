@@ -62,6 +62,7 @@ import os
 import errno
 import getopt
 import pkgutil
+import traceback
 
 import sfsp
 from sfsp import debug
@@ -144,8 +145,9 @@ def load_plugin(plugin, *args):
     try:
         __import__(plugin)
         sfsp.plugin.Plugin.registerModule(plugin, *args)
-    except ImportError:
+    except ImportError as err:
         print('Cannot import module "{}"'.format(plugin), file = sys.stderr)
+        traceback.print_exc()
 
 def load_plugins():
     for _, plugin, _ in pkgutil.iter_modules(['plugins']):

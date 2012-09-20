@@ -7,17 +7,18 @@ Created on 31.08.2012
 import inspect
 from pprint import pprint
 import time
+import traceback
 import weakref
 
 from sfsp import debug
 from sfsp.util.bucketset import BucketSet
 import sfsp.session
 
-class Scope():
+class Scope(object):
     GLOBAL = 0
     SESSION = 1
 
-class EventResult():
+class EventResult(object):
     NONE = -1,
     OK = 0
 
@@ -96,7 +97,11 @@ class Event():
 
     def notify(self, *args):
         for listener in self.listeners:
-            listener(self, *args)
+            try:
+                listener(self, *args)
+            except Exception:
+                print("Error in event listener %s:")
+                traceback.print_exc()
 
     def probe(self, defaultresult, *args):
         resultlist = EventResultList()
@@ -141,6 +146,9 @@ class EventListener():
         self._lastCleanup = time.time()
         if Scope.SESSION == scope:
             self._sessionModules = {}
+
+    def __repr__(self):
+        return 'EventListener(%(module), %(method), %(scope))' % (self)
 
     def _cleanupSessionModules(self):
         timeClean = time.time() - EventListener.CLEANUP_INTERVAL

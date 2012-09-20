@@ -28,7 +28,6 @@ class BucketSet(MutableSet):
             self.bucketlist.insert(bucket)
             self.buckets[bucket] = set()
         self.buckets[bucket].add(key)
-        print(self)
 
     def discard(self, key):
         if key in self.map:
