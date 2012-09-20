@@ -15,7 +15,7 @@ def name():
 #TODO: persist data
 #TODO: configurable delays (general configurability)
 
-@plugin()
+#@plugin()
 class Greylisting():
     '''
     classdocs

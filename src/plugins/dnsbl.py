@@ -32,6 +32,7 @@ class DNSBL(object):
         resolver = asyncdns.Resolver(wheel)
 
         def collect_result(nameserver, domain, results):
+            #TODO: scoring
             print('Got one: ', domain, results)
             latch.countDown()
 
@@ -43,6 +44,8 @@ class DNSBL(object):
             latch.await()
         except Exception as excpt:
             print('Error in lookup: ', excpt)
+
+        #TODO: react to scores
 
 
 class DNSBlacklist(object):
