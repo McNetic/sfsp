@@ -1,8 +1,8 @@
-import asyncore
 import socket
 import time
 
 from sfsp.session import *
+import sfsp.util.asyncore as asyncore
 from sfsp import debug
 
 class Proxy(asyncore.dispatcher):
