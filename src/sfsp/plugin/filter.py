@@ -32,5 +32,8 @@ class Filter():
     def validateClientAddress(client):
         return sfsp.plugin.event.ValidateClientAddress.probe(FilterResultOK, client)
 
+    @staticmethod
+    def validateData(transaction):
+        return sfsp.plugin.event.ValidateData.probe(FilterResultOK, transaction)
 
 FilterResultOK = FilterResult(errorlevel = FilterResult.OK, faillevel = FilterResult.FAIL_NOT, message = 'Ok', smtp_error = 250);
