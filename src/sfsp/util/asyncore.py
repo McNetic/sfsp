@@ -56,6 +56,8 @@ import os
 from errno import EALREADY, EINPROGRESS, EWOULDBLOCK, ECONNRESET, EINVAL, \
      ENOTCONN, ESHUTDOWN, EINTR, EISCONN, EBADF, ECONNABORTED, EPIPE, EAGAIN, \
      errorcode
+if 'win32' == sys.platform:
+    from errno import WSAEWOULDBLOCK
 
 _DISCONNECTED = frozenset((ECONNRESET, ENOTCONN, ESHUTDOWN, ECONNABORTED, EPIPE,
                            EBADF))
@@ -381,15 +383,7 @@ class dispatcher:
 
     def recv(self, buffer_size):
         try:
-            try:
-                data = self.socket.recv(buffer_size)
-            except socket.error as e:
-                if 10035 == e.errno:
-                    pass
-                #elif 11 == e.errno:
-                #    pass
-                else:
-                    raise e
+            data = self.socket.recv(buffer_size)
 
             if not data:
                 # a closed connection is indicated by signaling
@@ -403,6 +397,10 @@ class dispatcher:
             if why.args[0] in _DISCONNECTED:
                 self.handle_close()
                 return b''
+            elif 'win32' == sys.platform and WSAEWOULDBLOCK == why.errno:
+                return b''
+            #elif 11 == e.errno:
+            #    pass
             else:
                 raise
 

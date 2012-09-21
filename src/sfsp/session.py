@@ -1,4 +1,4 @@
-import asynchat
+import sfsp.util.asynchat as asynchat
 import errno
 import smtplib
 import socket
@@ -210,6 +210,11 @@ class SMTPSession(asynchat.async_chat):
         #print("### EOM ###", file = debug.stream())
 
         # TODO: content filtering here.
+        result = sfsp.plugin.filter.Filter.validateData(self.transaction)
+        if 250 != result.mainresult.smtp_error:
+            self.sendReply((result.mainresult.smtp_error, result.mainresult.message), event.ReceivedSMTPRcpt)
+            return
+
 
         # finally, delivery
         try:
