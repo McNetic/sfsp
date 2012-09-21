@@ -4,8 +4,8 @@ from __future__ import with_statement
 import sys
 import logging
 import socket
-from errno import *
-import asyncore
+from errno import EWOULDBLOCK, EAGAIN
+import sfsp.util.asyncore as asyncore
 import threading
 
 import traceback
@@ -140,7 +140,7 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
         try:
             return self.socket.sendto(data, 0, address)
         except socket.error as why:
-            if why[0] == EWOULDBLOCK:
+            if why.errno == EWOULDBLOCK:
                 return 0
             else:
                 self.logger.warn("fail to send packet, %s", why)
@@ -153,7 +153,7 @@ class Pipeline(asyncore.dispatcher, threading.Thread):
         try:
             return self.socket.recvfrom(65535)
         except socket.error as why:
-            if why[0] in [EWOULDBLOCK, EAGAIN]:
+            if why.errno in [EWOULDBLOCK, EAGAIN]:
                 return None, None
             else:
                 self.logger.warn("fail to receive packet, %s", why)
