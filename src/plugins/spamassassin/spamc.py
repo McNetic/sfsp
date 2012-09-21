@@ -36,7 +36,7 @@ class Response(object):
         self.required = UNKNOWN
 
     def _read_status_line(self):
-        line = self.fd.readline()
+        line = str(self.fd.readline(), 'ascii')
         if not line:
             raise ProtocolError('empty status line')
 
@@ -55,7 +55,7 @@ class Response(object):
         except ValueError:
             raise ProtocolError('bad status line: %s' % line)
 
-        if not self.version > 1.0:
+        if not version > 1.0:
             raise ProtocolError('unknown protocol: %s' % self.version)
 
         return version, status, reason
@@ -63,7 +63,7 @@ class Response(object):
     def _read_headers(self):
         headers = []
         while True:
-            line = self.fd.readline(MAXLINE + 1)
+            line = str(self.fd.readline(MAXLINE + 1), 'ascii')
             if len(line) > MAXLINE:
                 raise ProtocolError('header line too long')
             headers.append(line)
@@ -102,7 +102,7 @@ class Response(object):
     def _read_data(self, size):
         s = []
         while size > 0:
-            chunk = self.fd.read(min(size, MAXAMOUNT))
+            chunk = str(self.fd.read(min(size, MAXAMOUNT)), 'ascii')
             if not chunk:
                 raise ProtocolError('incomplete read')
             s.append(chunk)
@@ -124,7 +124,7 @@ class Response(object):
                 self.close()
             return s
 
-        s = self.fd.read(size)
+        s = str(self.fd.read(size), 'ascii')
         return s
 
     def close(self):
@@ -169,23 +169,26 @@ class Client(object):
         request = '%s SPAMC/1.5' % method
         output.append(request)
         if body is not None:
-            output.append('Content-length: %d' % len(body))
+            output.append('Content-length: %d' % (len(body) + 2))
         if user is not None:
             output.append('User: %s' % user)
             # remove user from provided headers
             headers.pop('User', None)
-        for header, value in headers.iteritems():
+        for header, value in headers.items():
             output.append('%s: %s' % (header, value))
         output.append('')
         if body is not None:
             output.append(body)
-        output.append('')
+            output.append('')
 
         # send
         data = '\r\n'.join(output)
+        print('###SPAMC')
+        print(data)
+        print('###SPAMC')
         del output[:]
         self.connect()
-        self.sock.sendall(data)
+        self.sock.sendall(bytes(data, 'ascii'))
 
         # parse response
         self.response = Response(self.sock, self.method)
