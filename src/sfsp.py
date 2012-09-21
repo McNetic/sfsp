@@ -72,33 +72,44 @@ __all__ = ["SMTPServer", "PureProxy"]
 program = sys.argv[0]
 __version__ = 'Python SMTP proxy version 0.2'
 
-
 COMMASPACE = ', '
 
-
-
 def usage(code, msg = ''):
     print(__doc__ % globals(), file = sys.stderr)
     if msg:
         print(msg, file = sys.stderr)
     sys.exit(code)
 
+class OptDict(dict):
 
+    def __getattr__(self, name):
+        return self.get(name)
 
+    def __setattr__(self, name, value):
+        if not name in self:
+            self[name] = value
+        super().__setattr__(name, value)
 
-class Options:
+class Options(OptDict):
     setuid = 1
     localaddress = 'localhost'
     localport = 8025
     remoteaddress = 'localhost'
     remoteport = 25
 
+    modules = OptDict()
+    modules.delay = OptDict()
+    modules.delay.enabled = False
+    modules.dnsbl = OptDict()
+    modules.dnsbl.enabled = False
+    modules.greylisting = OptDict()
+    modules.greylisting.enabled = False
+    modules.spamassassin = OptDict()
+    modules.spamassassin.enabled = True
+
     delay = 0
     defer_errors = True
 
-
-
-
 def parseargs():
     try:
         opts, args = getopt.getopt(
@@ -149,9 +160,10 @@ def load_plugin(plugin, *args):
         print('Cannot import module "{}"'.format(plugin), file = sys.stderr)
         traceback.print_exc()
 
-def load_plugins():
+def load_plugins(modopts):
     for _, plugin, _ in pkgutil.iter_modules(['plugins']):
-        load_plugin('plugins.%s' % plugin)
+        if not modopts[plugin] or modopts[plugin].enabled:
+            load_plugin('plugins.%s' % plugin)
     pass
 
 def require_version_3_2():
@@ -162,7 +174,7 @@ def require_version_3_2():
 if __name__ == '__main__':
     require_version_3_2()
     options = parseargs()
-    load_plugins()
+    load_plugins(options.modules)
     proxy = sfsp.Proxy(options, __version__)
     # Become nobody
     if options.setuid:
