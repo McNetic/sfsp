@@ -4,6 +4,8 @@ Created on 20.09.2012
 @author: ehe
 '''
 
+import email
+
 from .spamc import Client as SPAMC
 
 from sfsp.plugin import plugin, event
@@ -24,12 +26,12 @@ class SpamAssassin(object):
         # parse returned message headers
         data = resp.read()
         print(data)
-        #headers = email.parser.Parser().parsestr(data)
+        headers = email.parser.Parser().parsestr(data)
         # add headers
-        #for name in HEADERS:
-        #    # transform multiple line headers to single line ones
-        #    value = ' '.join(headers.get(name, '').split())
-        #    self.addheader(name, value)
+        for name in headers:
+            # transform multiple line headers to single line ones
+            value = ' '.join(headers.get(name, '').split())
+            print('#%s#%s#' % (name, value))
         # accept message
         #return milter.ACCEPT
 
