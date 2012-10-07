@@ -215,6 +215,8 @@ class SMTPSession(asynchat.async_chat):
             self.sendReply((result.mainresult.smtp_error, result.mainresult.message), event.ReceivedSMTPRcpt)
             return
 
+        self.sendReply((451, 'Error in processing'))
+        return
 
         # finally, delivery
         try:
