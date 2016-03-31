@@ -1,61 +1,11 @@
 #! /usr/bin/env python3
-'''
-Created on 28.08.2012
-
-@author: Nicolai Ehemann
-'''
-"""An RFC 2821 smtp proxy.
-
-Usage: %(program)s [options]
-
-Options:
-
-    --nosetuid
-    -n
-        This program generally tries to setuid `nobody', unless this flag is
-        set.  The setuid call will fail if this program is not run as root (in
-        which case, use this flag).
-
-    --version
-    -V
-        Print the version number and exit.
-
-    --class classname
-    -c classname
-        Use `classname' as the concrete SMTP proxy class.  Uses `PureProxy' by
-        default.
-
-    --debug
-    -d
-        Turn on debugging prints.
-
-    --help
-    -h
-        Print this message and exit.
-
-Version: %(__version__)s
-
-If localhost is not given then `localhost' is used, and if localport is not
-given then 8025 is used.  If remotehost is not given then `localhost' is used,
-and if remoteport is not given, then 25 is used.
 """
+sfsp - Small/Simple filtering SMTP Proxy
 
-
-# Overview:
-#   PureProxy - Proxies all messages to a real smtpd which does final
-#   delivery.  One known problem with this class is that it doesn't handle
-#   SMTP errors from the backend server at all.  This should be fixed
-#   (contributions are welcome!).
-#
+(C) 2012,2016 Nicolai Ehemann (en@enlightened.de)
 
-# Author: Barry Warsaw <barry@python.org>
-#
-# TODO:
-#
-# - support mailbox delivery
-# - alias files
-# - ESMTP
-# - handle error codes from the backend smtpd
+
+"""
 
 import sys
 import os
@@ -67,15 +17,22 @@ import traceback
 import sfsp
 from sfsp import debug
 
-__all__ = ["SMTPServer", "PureProxy"]
-
 program = sys.argv[0]
-__version__ = 'Python SMTP proxy version 0.2'
-
-COMMASPACE = ', '
+__version__ = '0.1'
+__years__ = '2012,2016'
 
 def usage(code, msg = ''):
-    print(__doc__ % globals(), file = sys.stderr)
+    print("""Usage: %(program)s [options]
+Options:
+  -d | --debug         enable debug output
+  -h | --help          print this help and exit
+  -n | --nosetuid      disable setuid 'nobody' (use when not running as root)
+  -p | --remoteport    remote smtp server port, default: 25
+  -P | --localport     (local) port sfsp listens on, default: 8025
+  -s | --remotehost    remote smtp server hostname (or ip), default: localhost
+  -S | --localhost     (local) hostname/ip sfsp listens on, default: localhostt
+  -V | --version       print version information and exit
+""" % globals(), file = sys.stderr)
     if msg:
         print(msg, file = sys.stderr)
     sys.exit(code)
@@ -113,16 +70,14 @@ class Options(OptDict):
 def parseargs():
     try:
         opts, args = getopt.getopt(
-            sys.argv[1:], 'c:dhnp:P:s:S:V',
-            ['class=', 'debug', 'help', 'nosetuid', 'localport=', 'remoteport=', 'localhost=', 'remotehost=', 'version'])
+            sys.argv[1:], 'dhnp:P:s:S:V',
+            ['debug', 'help', 'nosetuid', 'localport=', 'remoteport=', 'localhost=', 'remotehost=', 'version'])
     except getopt.error as e:
         usage(1, e)
 
     options = Options()
     for opt, arg in opts:
-        if opt in ('-c', '--class'):
-            options.classname = arg
-        elif opt in ('-d', '--debug'):
+        if opt in ('-d', '--debug'):
             debug.enable()
         elif opt in ('-h', '--help'):
             usage(0)
@@ -143,12 +98,12 @@ def parseargs():
         elif opt in ('-S', '--localhost'):
             options.localaddress = arg
         elif opt in ('-V', '--version'):
-            print(__version__, file = sys.stderr)
+            print("%(program)s v%(__version__)s. (C) %(__years__)s Nicolai Ehemann (en@enlightened.de) " % globals(), file = sys.stderr)
             sys.exit(0)
 
     # parse the rest of the arguments
     if 0 < len(args):
-        usage(1, 'Invalid arguments: %s' % COMMASPACE.join(args))
+        usage(1, 'Invalid arguments: %s' % ', '.join(args))
 
     return options
 
